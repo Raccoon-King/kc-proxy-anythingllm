@@ -1,0 +1,25 @@
+﻿# Node dependencies and logs
+node_modules/
+pm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Proxy-specific
+proxy/node_modules/
+proxy/.env
+
+# Environment files
+*.env
+
+# AnythingLLM storage (local data only)
+data/*
+!data/.gitignore
+
+# Docker overrides
+docker-compose.override.yml
+
+# Editors/OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

@@ -1,0 +1,32 @@
+﻿services:
+  anythingllm:
+    image: mintplexlabs/anythingllm:latest
+    container_name: anythingllm
+    ports:
+      - "3001:3001"
+    environment:
+      - STORAGE_DIR=/app/server/storage
+    volumes:
+      - ./data:/app/server/storage
+      - ./data/.env:/app/server/.env
+    restart: unless-stopped
+
+  proxy:
+    build: ./proxy
+    container_name: anythingllm-proxy
+    depends_on:
+      - anythingllm
+    environment:
+      - TARGET_URL=http://anythingllm:3001
+      - PORT=8080
+      - LOG_LEVEL=info
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    # Forward websockets for streaming responses
+    expose:
+      - "8080"
+
+networks:
+  default:
+    name: anythingllm_net
