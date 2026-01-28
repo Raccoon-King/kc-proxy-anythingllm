@@ -7,6 +7,9 @@ pnpm-debug.log*
 # Proxy-specific
 proxy/node_modules/
 proxy/.env
+go-proxy/anythingllm-proxy
+go-proxy/bin/
+go-proxy/.env
 
 # Environment files
 *.env

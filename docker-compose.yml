@@ -12,20 +12,32 @@
     restart: unless-stopped
 
   proxy:
-    build: ./proxy
+    build: ./go-proxy
     container_name: anythingllm-proxy
     depends_on:
       - anythingllm
     environment:
-      - TARGET_URL=http://anythingllm:3001
       - PORT=8080
-      - LOG_LEVEL=info
+      - ANYLLM_URL=http://anythingllm:3001
+      - ANYLLM_API_KEY=${ANYLLM_API_KEY:-change-me}
+      - ANYLLM_AUTO_CREATE=true
+      - ANYLLM_DEFAULT_ROLE=user
+      - KEYCLOAK_ISSUER_URL=${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/master}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-anythingllm-proxy}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      - KEYCLOAK_REDIRECT_URL=${KEYCLOAK_REDIRECT_URL:-http://localhost:8080/auth/callback}
+      - SESSION_SECRET=${SESSION_SECRET:-generate-a-random-string}
+      - SESSION_SECURE=false
+      - BANNER_TOP_TEXT=${BANNER_TOP_TEXT:-SITE UNDER TEST}
+      - BANNER_BOTTOM_TEXT=${BANNER_BOTTOM_TEXT:-SITE UNDER TEST}
+      - BANNER_BG_COLOR=${BANNER_BG_COLOR:-#f6f000}
+      - BANNER_TEXT_COLOR=${BANNER_TEXT_COLOR:-#000000}
+      - AGREEMENT_TITLE=${AGREEMENT_TITLE:-User Agreement}
+      - AGREEMENT_BODY=${AGREEMENT_BODY:-Please acknowledge and accept this agreement to continue.}
+      - AGREEMENT_BUTTON_TEXT=${AGREEMENT_BUTTON_TEXT:-OK}
     ports:
       - "8080:8080"
     restart: unless-stopped
-    # Forward websockets for streaming responses
-    expose:
-      - "8080"
 
 networks:
   default:
