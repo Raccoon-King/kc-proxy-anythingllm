@@ -114,6 +114,43 @@ func TestCallbackRedirectAfterAppended(t *testing.T) {
 		t.Fatalf("expected redirectTo param, got %s", loc)
 	}
 }
+
+func TestAgreementAcceptUsesNextPath(t *testing.T) {
+	deps := newTestDeps()
+	deps.DisableAgreement = false
+	router := NewRouter(deps)
+
+	req := httptest.NewRequest(http.MethodGet, "/agreement", nil)
+	sess := sessions.NewSession(deps.Sessions.Store(), "anythingllm_proxy")
+	sess.Values["expiry"] = time.Now().Add(time.Hour).Unix()
+	sess.Values["agreement_next"] = "/sso/simple?token=tkn"
+	w := httptest.NewRecorder()
+	_ = sess.Save(req, w)
+	cookie := w.Result().Cookies()[0]
+
+	rr := httptest.NewRecorder()
+	acceptReq := httptest.NewRequest(http.MethodPost, "/agreement/accept", nil)
+	acceptReq.AddCookie(cookie)
+	router.ServeHTTP(rr, acceptReq)
+
+	if loc := rr.Header().Get("Location"); loc != "/sso/simple?token=tkn" {
+		t.Fatalf("expected redirect to agreement_next, got %s", loc)
+	}
+
+	// Ensure agreement_next is cleared
+	rr2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	// reuse latest session cookie
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == "anythingllm_proxy" {
+			req2.AddCookie(c)
+		}
+	}
+	router.ServeHTTP(rr2, req2)
+	if strings.Contains(rr2.Header().Get("Location"), "agreement_next") {
+		t.Fatalf("agreement_next should be cleared after accept")
+	}
+}
 func TestPickNamePrefersFields(t *testing.T) {
 	if pickName(&auth.TokenClaims{Name: "Full", PreferredUsername: "user", Email: "a"}) != "Full" {
 		t.Fatalf("expected name")
@@ -286,6 +323,26 @@ func TestAgreementAcceptDefaultNext(t *testing.T) {
 	loc := rr.Header().Get("Location")
 	if loc == "" || !strings.HasPrefix(loc, "/") {
 		t.Fatalf("expected default redirect /, got %s", loc)
+	}
+}
+
+func TestKeycloakLogoutURLUsesExternal(t *testing.T) {
+	cfg := config.Config{
+		KeycloakIssuerURL:   "http://keycloak:8080/realms/mapache",
+		KeycloakExternalURL: "http://localhost:8180/realms/mapache",
+		KeycloakClientID:    "mapache-client",
+		KeycloakRedirectURL: "http://localhost:8080/auth/callback",
+		Port:                "8080",
+	}
+	url := keycloakLogoutURL(cfg)
+	if !strings.HasPrefix(url, "http://localhost:8180/realms/mapache/protocol/openid-connect/logout") {
+		t.Fatalf("unexpected base in logout url: %s", url)
+	}
+	if !strings.Contains(url, "client_id=mapache-client") {
+		t.Fatalf("missing client id: %s", url)
+	}
+	if !strings.Contains(url, "redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth%2Fcallback") {
+		t.Fatalf("unexpected redirect uri: %s", url)
 	}
 }
 

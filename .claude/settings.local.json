@@ -18,5 +18,11 @@
       "Bash(docker inspect:*)",
       "Bash(curl:*)"
     ]
+  },
+  "mcpServers": {
+    "kapture": {
+      "command": "npx",
+      "args": ["-y", "kapture-mcp", "bridge"]
+    }
   }
 }

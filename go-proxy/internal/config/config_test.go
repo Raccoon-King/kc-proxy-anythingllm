@@ -24,4 +24,18 @@ func TestLoadUsesDefaultsAndEnv(t *testing.T) {
 	if string(cfg.SessionSecret) != "abc" {
 		t.Fatalf("session secret not loaded")
 	}
+	if cfg.KeycloakExternalURL != "https://issuer" {
+		t.Fatalf("expected external URL fallback to issuer")
+	}
+}
+
+func TestDeriveExternalIssuerDefaultsForInternalHost(t *testing.T) {
+	url := deriveExternalIssuer("http://keycloak:8080/realms/mapache")
+	if url != "http://localhost:8180/realms/mapache" {
+		t.Fatalf("unexpected derived url %s", url)
+	}
+	url2 := deriveExternalIssuer("http://otherhost/realms/x")
+	if url2 != "http://otherhost/realms/x" {
+		t.Fatalf("expected passthrough for non-keycloak host")
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -57,12 +58,16 @@ func mustEnv(key string) string {
 func Load() Config {
 	sessionSecret := mustEnv("SESSION_SECRET")
 	issuerURL := mustEnv("KEYCLOAK_ISSUER_URL")
+	externalURL := getenv("KEYCLOAK_EXTERNAL_URL", "")
+	if externalURL == "" {
+		externalURL = deriveExternalIssuer(issuerURL)
+	}
 	cfg := Config{
 		Port:                 getenv("PORT", "8080"),
 		AnythingLLMBaseURL:   getenv("ANYLLM_URL", "http://anythingllm:3001"),
 		AnythingLLMAPIKey:    mustEnv("ANYLLM_API_KEY"),
 		KeycloakIssuerURL:    issuerURL,
-		KeycloakExternalURL:  getenv("KEYCLOAK_EXTERNAL_URL", issuerURL), // defaults to internal URL
+		KeycloakExternalURL:  externalURL,
 		KeycloakClientID:     mustEnv("KEYCLOAK_CLIENT_ID"),
 		KeycloakClientSecret: mustEnv("KEYCLOAK_CLIENT_SECRET"),
 		KeycloakRedirectURL:  getenv("KEYCLOAK_REDIRECT_URL", "http://localhost:8080/auth/callback"),
@@ -86,6 +91,29 @@ func Load() Config {
 	}
 
 	return cfg
+}
+
+// deriveExternalIssuer attempts to produce a browser-facing issuer URL when only an internal
+// issuer is provided (common in Docker: issuer=http://keycloak:8080/realms/... but browser must
+// hit localhost:8180).
+func deriveExternalIssuer(issuer string) string {
+	parsed, err := url.Parse(issuer)
+	if err != nil {
+		return issuer
+	}
+	host := parsed.Hostname()
+	port := parsed.Port()
+	// heuristic: if host is the internal docker hostname "keycloak" and port is 8080,
+	// assume the browser can reach it on localhost:8180 (compose default).
+	if strings.EqualFold(host, "keycloak") {
+		if port == "8080" || port == "" {
+			parsed.Host = "localhost:8180"
+		} else {
+			parsed.Host = "localhost"
+		}
+		return strings.TrimSuffix(parsed.String(), "/")
+	}
+	return issuer
 }
 
 // HTTPClient builds an http.Client honoring Keycloak TLS settings.

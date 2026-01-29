@@ -148,17 +148,26 @@ func NewRouter(d Dependencies) http.Handler {
 			return
 		}
 		sess, _ := d.Sessions.Get(r)
-		sess.Values["agreement_accepted"] = true
-		_ = d.Sessions.Save(r, w, sess)
-		secLog("agreement accepted")
-
-		// Redirect to login to start auth flow
-		redirect := r.URL.Query().Get("redirect")
-		if redirect == "" {
-			redirect = "/"
+		if !isSessionValid(sess) {
+			redirect := r.URL.Query().Get("redirect")
+			if redirect == "" {
+				redirect = "/"
+			}
+			dbgLog("agreement accept: no valid session, redirecting to login redirect=%s", redirect)
+			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
+			return
 		}
-		dbgLog("agreement accepted, redirecting to login with redirect=%s", redirect)
-		http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
+		sess.Values["agreement_accepted"] = true
+
+		next := "/"
+		if v, ok := sess.Values["agreement_next"].(string); ok && v != "" {
+			next = v
+		}
+		delete(sess.Values, "agreement_next")
+
+		_ = d.Sessions.Save(r, w, sess)
+		secLog("agreement accepted; redirecting to %s", next)
+		http.Redirect(w, r, next, http.StatusFound)
 	})
 
 	// Login - requires agreement first, then initiates Keycloak auth
@@ -243,10 +252,7 @@ func NewRouter(d Dependencies) http.Handler {
 		}
 		dbgLog("kc id_token claims=%s", decodeJWTClaims(rawIDToken))
 
-		// Store tokens in session
-		sess.Values["id_token"] = rawIDToken
-		sess.Values["access_token"] = token.AccessToken
-		sess.Values["refresh_token"] = token.RefreshToken
+		// Store only small identity/session fields to avoid cookie bloat.
 		sess.Values["expiry"] = token.Expiry.Unix()
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
@@ -603,7 +609,7 @@ func expireProxyCookie(resp *http.Response) {
 
 // keycloakLogoutURL builds the RP-initiated logout URL for Keycloak.
 func keycloakLogoutURL(cfg config.Config) string {
-	base := strings.TrimSuffix(cfg.KeycloakIssuerURL, "/")
+	base := strings.TrimSuffix(cfg.KeycloakExternalURL, "/")
 	redirect := cfg.KeycloakRedirectURL
 	if redirect == "" {
 		redirect = "http://localhost:" + cfg.Port + "/"

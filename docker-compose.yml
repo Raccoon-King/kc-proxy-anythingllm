@@ -29,7 +29,7 @@
       - KEYCLOAK_REDIRECT_URL=${KEYCLOAK_REDIRECT_URL:-http://localhost:8080/auth/callback}
       # External URL for browser redirects (what users see)
       - KEYCLOAK_EXTERNAL_URL=${KEYCLOAK_EXTERNAL_URL:-http://localhost:8180/realms/mapache}
-      - SESSION_SECRET=${SESSION_SECRET:-generate-a-random-string}
+      - SESSION_SECRET=${SESSION_SECRET:-hzo9edRqjnSGhBpKnjxkGZv62eNmfOJknhB0v95Otdc=}
       - SESSION_SECURE=false
       - BANNER_TOP_TEXT=${BANNER_TOP_TEXT:-SITE UNDER TEST}
       - BANNER_BOTTOM_TEXT=${BANNER_BOTTOM_TEXT:-SITE UNDER TEST}

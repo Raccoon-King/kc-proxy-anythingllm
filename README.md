@@ -45,17 +45,37 @@ Browse to http://localhost:8080 and log in.
 ## Configuration (proxy)
 - Core: `PORT` (8080), `ANYLLM_URL` (http://anythingllm:3001), `ANYLLM_API_KEY` (required), `ANYLLM_AUTO_CREATE` (default true), `ANYLLM_DEFAULT_ROLE` (user)
 - Keycloak: `KEYCLOAK_ISSUER_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_REDIRECT_URL` (default http://localhost:8080/auth/callback), `KEYCLOAK_CA_PATH`, `KEYCLOAK_INSECURE_SKIP_VERIFY`
+  - Use `KEYCLOAK_EXTERNAL_URL` for the browser-facing realm URL (e.g., `http://localhost:8180/realms/mapache`); otherwise the proxy may redirect to the internal hostname (e.g., `http://keycloak:8080/`).
 - Sessions/UI: `SESSION_SECRET` (required), `SESSION_SECURE` (false for http dev)
 - Banners: `BANNER_TOP_TEXT`, `BANNER_BOTTOM_TEXT`, `BANNER_BG_COLOR`, `BANNER_TEXT_COLOR`
 - Agreement (can be disabled): `AGREEMENT_TITLE`, `AGREEMENT_BODY`, `AGREEMENT_BUTTON_TEXT`, `DISABLE_AGREEMENT` (default false)
 - Logging: `DEBUG_LOGGING` (false), `SECURITY_LOGGING` (true), `DEBUG_HTTP` (true to log upstream calls)
 
+### Environment variables (proxy)
+| Name | Default | Notes |
+| --- | --- | --- |
+| `ANYLLM_API_KEY` | _required_ | AnythingLLM admin API key for Simple SSO token issuance. |
+| `ANYLLM_URL` | `http://anythingllm:3001` | Base URL for proxy→AnythingLLM calls. |
+| `ANYLLM_AUTO_CREATE` | `true` | Auto-create users in AnythingLLM if missing. |
+| `ANYLLM_DEFAULT_ROLE` | `user` | Default role on auto-create. |
+| `KEYCLOAK_ISSUER_URL` | _required_ | Internal URL for proxy→Keycloak (matches realm issuer). |
+| `KEYCLOAK_EXTERNAL_URL` | issuer | Public URL for browser redirects if different from issuer. |
+| `KEYCLOAK_CLIENT_ID` | _required_ | Client configured in Keycloak (e.g., `mapache-client`). |
+| `KEYCLOAK_CLIENT_SECRET` | _required_ | Dev secret provided by the Keycloak client. |
+| `KEYCLOAK_REDIRECT_URL` | `http://localhost:8080/auth/callback` | Must be allowed in Keycloak client redirects. |
+| `SESSION_SECRET` | _required_ | HMAC key for `anythingllm_proxy` session cookie. |
+| `SESSION_SECURE` | `false` | Set `true` in HTTPS deployments. |
+| `BANNER_*`, `AGREEMENT_*` | defaults shown above | Optional UI banners and agreement gate. |
+| `DEBUG_LOGGING` | `false` | Set `true` for verbose proxy logs. |
+| `KEYCLOAK_CA_PATH` | _empty_ | PEM bundle for Keycloak TLS; use with `KEYCLOAK_INSECURE_SKIP_VERIFY=false`. |
+
 ## AnythingLLM settings
-In `data/.env` (mounted to `/app/server/.env`):
+Create `data/.env` (mounted to `/app/server/.env` inside the container) with at least:
 ```
 SIMPLE_SSO_ENABLED=true
 SIMPLE_SSO_NO_LOGIN=true   # optional if you only use SSO
 ```
+See AnythingLLM docs for additional keys: https://docs.anythingllm.com/
 
 ## Flows & edge handling
 - Missing/invalid SSO token on `/sso/*` → redirect to `/login` to restart.
