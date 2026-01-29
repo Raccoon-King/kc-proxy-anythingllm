@@ -39,6 +39,12 @@ func TestAccessRequestForMissingUser(t *testing.T) {
 	cbReq.AddCookie(cookie)
 	cbRR := httptest.NewRecorder()
 	router.ServeHTTP(cbRR, cbReq)
+	cbCookie := cookie
+	for _, c := range cbRR.Result().Cookies() {
+		if c.Name == "anythingllm_proxy" {
+			cbCookie = c
+		}
+	}
 
 	if cbRR.Code != http.StatusFound {
 		t.Fatalf("expected redirect, got %d", cbRR.Code)
@@ -48,7 +54,7 @@ func TestAccessRequestForMissingUser(t *testing.T) {
 	}
 
 	arReq := httptest.NewRequest(http.MethodGet, "/access-request", nil)
-	arReq.AddCookie(cookie)
+	arReq.AddCookie(cbCookie)
 	arRR := httptest.NewRecorder()
 	router.ServeHTTP(arRR, arReq)
 

@@ -640,7 +640,7 @@ func injectBanners(htmlBody string, cfg config.Config) string {
 }
 #proxy-banner-top { top: 0; }
 #proxy-banner-bottom { bottom: 0; }
-html, body { height: 100%; }
+html, body { height: 100%%; }
 body {
   margin: 0;
   padding-top: var(--proxy-banner-height);
