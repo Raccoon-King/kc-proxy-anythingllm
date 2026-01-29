@@ -185,10 +185,11 @@ func NewRouter(d Dependencies) http.Handler {
 		state := randomString(24)
 		codeVerifier := randomString(64)
 		codeChallenge := pkceChallenge(codeVerifier)
-		dbgLog("login: starting oauth flow, redirect=%s state=%s", r.URL.Query().Get("redirect"), state)
+		redirectAfter := sanitizeRedirect(r.URL.Query().Get("redirect"))
+		dbgLog("login: starting oauth flow, redirect=%s state=%s", redirectAfter, state)
 
 		sess.Values["oauth_state"] = state
-		sess.Values["redirect_after"] = r.URL.Query().Get("redirect")
+		sess.Values["redirect_after"] = redirectAfter
 		sess.Values["code_verifier"] = codeVerifier
 		_ = d.Sessions.Save(r, w, sess)
 
@@ -244,7 +245,7 @@ func NewRouter(d Dependencies) http.Handler {
 		}
 		dbgLog("kc id_token raw=%s", rawIDToken)
 
-		_, claims, err := d.OIDC.VerifyIDToken(r.Context(), rawIDToken)
+		idToken, claims, err := d.OIDC.VerifyIDToken(r.Context(), rawIDToken)
 		if err != nil {
 			secLog("invalid id token: %v", err)
 			http.Error(w, "invalid token", http.StatusBadRequest)
@@ -253,7 +254,14 @@ func NewRouter(d Dependencies) http.Handler {
 		dbgLog("kc id_token claims=%s", decodeJWTClaims(rawIDToken))
 
 		// Store only small identity/session fields to avoid cookie bloat.
-		sess.Values["expiry"] = token.Expiry.Unix()
+		expiry := token.Expiry
+		if idToken != nil && !idToken.Expiry.IsZero() {
+			expiry = idToken.Expiry
+		}
+		if expiry.IsZero() {
+			expiry = time.Now().Add(1 * time.Hour)
+		}
+		sess.Values["expiry"] = expiry.Unix()
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
 		sess.Values["agreement_accepted"] = false
@@ -315,11 +323,20 @@ func NewRouter(d Dependencies) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.ToLower(r.URL.Path)
 
+		// Handle logout paths early to avoid hanging on downstream redirects.
+		if strings.Contains(path, "logout") {
+			_ = d.Sessions.Clear(r, w)
+			secLog("logout requested; local session cleared path=%s", r.URL.Path)
+			http.Redirect(w, r, "/login?redirect=%2F", http.StatusFound)
+			return
+		}
+
 		// Skip auth for static assets to prevent parallel auth flows
 		if strings.HasSuffix(path, ".ico") || strings.HasSuffix(path, ".png") ||
 			strings.HasSuffix(path, ".jpg") || strings.HasSuffix(path, ".svg") ||
 			strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js") ||
-			strings.HasSuffix(path, ".woff") || strings.HasSuffix(path, ".woff2") {
+			strings.HasSuffix(path, ".woff") || strings.HasSuffix(path, ".woff2") ||
+			path == "/manifest.json" || path == "/asset-manifest.json" {
 			proxy.ServeHTTP(w, r)
 			return
 		}
@@ -328,7 +345,8 @@ func NewRouter(d Dependencies) http.Handler {
 		if strings.HasPrefix(path, "/sso/") {
 			if r.URL.Query().Get("token") == "" {
 				dbgLog("sso request without token, redirecting to login")
-				http.Redirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
+				_ = d.Sessions.Clear(r, w)
+				http.Redirect(w, r, "/login?redirect=%2F", http.StatusFound)
 				return
 			}
 			dbgLog("allowing SSO path through without proxy auth: %s", path)
@@ -359,12 +377,6 @@ func NewRouter(d Dependencies) http.Handler {
 			}
 		}
 
-		// Handle logout paths
-		if strings.Contains(strings.ToLower(r.URL.Path), "logout") {
-			_ = d.Sessions.Clear(r, w)
-			secLog("downstream logout path detected; local session cleared path=%s", r.URL.Path)
-		}
-
 		dbgLog("proxying %s %s", r.Method, r.URL.Path)
 		proxy.ServeHTTP(w, r)
 	})
@@ -386,9 +398,14 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 		if resp == nil || resp.Body == nil {
 			return nil
 		}
+		path := ""
+		if resp.Request != nil && resp.Request.URL != nil {
+			path = resp.Request.URL.Path
+		}
 
 		// If AnythingLLM returns auth failure or redirects to its own login, force a fresh SSO cycle.
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || isLoginRedirect(resp) {
+		if !(strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/sso/")) &&
+			(resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || isLoginRedirect(resp)) {
 			expireProxyCookie(resp)
 			resp.StatusCode = http.StatusFound
 			resp.Header.Set("Location", "/login")
@@ -573,6 +590,25 @@ func randomString(n int) string {
 func pkceChallenge(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+func sanitizeRedirect(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return ""
+	}
+	if !strings.HasPrefix(raw, "/") {
+		raw = "/" + raw
+	}
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "/sso/") || strings.HasPrefix(lower, "/auth/") ||
+		strings.HasPrefix(lower, "/login") || strings.HasPrefix(lower, "/agreement") {
+		return ""
+	}
+	return raw
 }
 
 // isLoginRedirect detects AnythingLLM redirects to its own login page.
