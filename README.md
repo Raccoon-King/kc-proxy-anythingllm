@@ -9,6 +9,10 @@ A Go reverse proxy that:
 ## Documentation
 - AnythingLLM product docs: https://docs.anythingllm.com/
 - Keycloak local setup details: `../kecloak/README.md` (realm `mapache`, client `mapache-client`).
+- Airgapped install: `docs/AIRGAPPED_INSTALL.md`.
+- Production readiness checklist: `docs/PRODUCTION_READINESS.md`.
+- Production values example: `docs/values.prod.example.yaml`.
+- Restricted-namespace values example: `docs/values.restricted.example.yaml`.
 
 ## Architecture
 ```
@@ -131,10 +135,16 @@ Docker builds via `go-proxy/Dockerfile`; `docker compose up -d --build` to rebui
 Charts live under `helm/`:
 - `helm/anythingllm`
 - `helm/proxy`
+- `helm/weaviate` (vendor dependency in `helm/weaviate/charts`)
 
-By default charts target the `posaidon` namespace (override `namespace` in values).
+By default charts install to the release namespace (set `namespace` in values to override).
 Images should point to Harbor (set `image.registry` / `image.repository` / `image.tag` in each chart).
 Proxy secrets are provided via `secretEnv` or `existingSecret`.
+AnythingLLM secrets are provided via `secretEnv` or `existingSecret`.
+
+Production hardening knobs (defaults are safe but off):
+- `autoscaling`, `podDisruptionBudget`, and `networkPolicy` blocks in `values.yaml`.
+- Security defaults: non-root, seccomp RuntimeDefault, and no SA token by default.
 
 ## Troubleshooting
 - `ERR_TOO_MANY_REDIRECTS`: clear `anythingllm_proxy` cookie or hit `/logout`; stale state/codes will be bounced now.

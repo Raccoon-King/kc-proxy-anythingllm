@@ -1,0 +1,36 @@
+proxy:
+  ingress:
+    enabled: false
+  serviceAccount:
+    create: false
+    automount: false
+  podDisruptionBudget:
+    enabled: false
+  autoscaling:
+    enabled: false
+  networkPolicy:
+    enabled: false
+
+anythingllm:
+  serviceAccount:
+    create: false
+    automount: false
+  podDisruptionBudget:
+    enabled: false
+  autoscaling:
+    enabled: false
+  networkPolicy:
+    enabled: false
+  persistence:
+    storageClass: ""
+
+weaviate:
+  service:
+    type: ClusterIP
+  grpcService:
+    enabled: false
+  initContainers:
+    sysctlInitContainer:
+      enabled: false
+  persistence:
+    storageClass: ""

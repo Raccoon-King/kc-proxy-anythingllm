@@ -206,12 +206,18 @@ func NewRouter(d Dependencies) http.Handler {
 	// Access request page (no auth required)
 	mux.HandleFunc("/access-request", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
-		email, _ := sess.Values["access_request_email"].(string)
-		name, _ := sess.Values["access_request_name"].(string)
-		username, _ := sess.Values["access_request_username"].(string)
-		subject, _ := sess.Values["access_request_sub"].(string)
+		tokenFields := map[string]string{
+			"username":    stringFromSession(sess, "access_request_username"),
+			"email":       stringFromSession(sess, "access_request_email"),
+			"given_name":  stringFromSession(sess, "access_request_given_name"),
+			"family_name": stringFromSession(sess, "access_request_family_name"),
+			"name":        stringFromSession(sess, "access_request_name"),
+			"sub":         stringFromSession(sess, "access_request_sub"),
+		}
+		groups, _ := sess.Values["access_request_groups"].([]string)
+		tokenFields["groups"] = strings.Join(groups, ", ")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(renderAccessRequestPage(d.Cfg, email, name, username, subject)))
+		_, _ = w.Write([]byte(renderAccessRequestPage(d.Cfg, tokenFields)))
 	})
 
 	// Logged-out page (no auth required)
@@ -338,6 +344,9 @@ func NewRouter(d Dependencies) http.Handler {
 				sess.Values["access_request_email"] = claims.Email
 				sess.Values["access_request_name"] = pickName(claims)
 				sess.Values["access_request_username"] = claims.PreferredUsername
+				sess.Values["access_request_given_name"] = claims.GivenName
+				sess.Values["access_request_family_name"] = claims.FamilyName
+				sess.Values["access_request_groups"] = claims.Groups
 				sess.Values["access_request_sub"] = claims.Subject
 				_ = d.Sessions.Save(r, w, sess)
 				http.Redirect(w, r, "/access-request", http.StatusFound)
@@ -416,6 +425,31 @@ func NewRouter(d Dependencies) http.Handler {
 		// Allow AnythingLLM's SSO/API endpoints through with a guard for missing token
 		if strings.HasPrefix(path, "/sso/") {
 			if r.URL.Query().Get("token") == "" {
+				// If session is still valid, re-issue SSO token instead of logging out
+				if isSessionValid(sess) {
+					email, _ := sess.Values["email"].(string)
+					name, _ := sess.Values["name"].(string)
+					if email != "" {
+						dbgLog("sso request without token but valid session, re-issuing token for %s", email)
+						userID, err := d.LLM.EnsureUser(r.Context(), email, name, d.Cfg.DefaultRole, false)
+						if err == nil {
+							tokenResp, err := d.LLM.IssueAuthToken(r.Context(), userID)
+							if err == nil {
+								redirectPath := tokenResp.LoginPath
+								if !strings.HasPrefix(redirectPath, "/") {
+									redirectPath = "/" + redirectPath
+								}
+								secLog("sso token re-issued userID=%s email=%s", userID, email)
+								http.Redirect(w, r, redirectPath, http.StatusFound)
+								return
+							}
+							secLog("failed to re-issue auth token: %v", err)
+						} else {
+							secLog("failed to ensure user for token re-issue: %v", err)
+						}
+					}
+				}
+				// Fall back to logout if session invalid or re-issue failed
 				dbgLog("sso request without token, logging out of keycloak")
 				idToken := getIDToken(sess, idTokenCache)
 				clearIDTokenCache(sess, idTokenCache)
@@ -478,6 +512,14 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 		req.URL.Scheme = targetURL.Scheme
 		req.URL.Host = targetURL.Host
 		req.Host = targetURL.Host
+		// Strip caching headers for HTML page requests to ensure we get fresh content to inject banners into.
+		// Without this, 304 responses have no body and we can't inject.
+		path := req.URL.Path
+		isHTMLRequest := path == "/" || path == "" || (!strings.Contains(path, ".") && !strings.HasPrefix(path, "/api/"))
+		if isHTMLRequest {
+			req.Header.Del("If-None-Match")
+			req.Header.Del("If-Modified-Since")
+		}
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp == nil || resp.Body == nil {
@@ -776,10 +818,10 @@ func renderLoggedOutPage(cfg config.Config) string {
 	return injectBanners(agreementHTML(body), cfg)
 }
 
-func renderAccessRequestPage(cfg config.Config, email, name, username, subject string) string {
-	display := strings.TrimSpace(name)
+func renderAccessRequestPage(cfg config.Config, tokenFields map[string]string) string {
+	display := strings.TrimSpace(tokenFields["name"])
 	if display == "" {
-		display = strings.TrimSpace(email)
+		display = strings.TrimSpace(tokenFields["email"])
 	}
 	if display == "" {
 		display = "Unknown user"
@@ -816,11 +858,21 @@ func renderAccessRequestPage(cfg config.Config, email, name, username, subject s
 	if signOutText == "" {
 		signOutText = "Sign out"
 	}
-	infoLines := []string{
-		"Name: " + strings.TrimSpace(name),
-		"Email: " + strings.TrimSpace(email),
-		"Username: " + strings.TrimSpace(username),
-		"Keycloak Subject: " + strings.TrimSpace(subject),
+	infoLines := make([]string, 0, len(cfg.AccessRequestFields))
+	for _, field := range cfg.AccessRequestFields {
+		key := strings.TrimSpace(strings.ToLower(field))
+		if key == "" {
+			continue
+		}
+		label := accessRequestLabel(key)
+		if label == "" {
+			continue
+		}
+		value := strings.TrimSpace(tokenFields[key])
+		if value == "" {
+			continue
+		}
+		infoLines = append(infoLines, label+": "+value)
 	}
 	// Remove empty fields while keeping labels clean.
 	clean := make([]string, 0, len(infoLines))
@@ -847,6 +899,27 @@ func renderAccessRequestPage(cfg config.Config, email, name, username, subject s
 	return injectBanners(agreementHTML(body), cfg)
 }
 
+func accessRequestLabel(field string) string {
+	switch field {
+	case "username", "preferred_username":
+		return "Username"
+	case "email":
+		return "Email"
+	case "given_name":
+		return "First Name"
+	case "family_name":
+		return "Last Name"
+	case "name":
+		return "Display Name"
+	case "groups":
+		return "Groups"
+	case "sub", "subject":
+		return "Keycloak Subject"
+	default:
+		return ""
+	}
+}
+
 func agreementHTML(inner string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
@@ -855,7 +928,7 @@ func agreementHTML(inner string) string {
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>User Agreement</title>
 </head>
-<body>
+<body class="proxy-standalone">
 %s
 </body>
 </html>`, inner)
@@ -865,8 +938,19 @@ func injectBanners(htmlBody string, cfg config.Config) string {
 	if strings.Contains(htmlBody, "proxy-banner-top") {
 		return htmlBody
 	}
-	style := fmt.Sprintf(`<style>
-:root { --proxy-banner-height: 24px; }
+style := fmt.Sprintf(`<style>
+:root {
+  --proxy-banner-height: 24px;
+  --proxy-bg: #0b1020;
+  --proxy-surface: #0f172a;
+  --proxy-surface-strong: #111c34;
+  --proxy-border: rgba(148, 163, 184, 0.18);
+  --proxy-text: #e2e8f0;
+  --proxy-muted: #94a3b8;
+  --proxy-accent: #2dd4bf;
+  --proxy-accent-strong: #14b8a6;
+  --proxy-shadow: 0 24px 60px rgba(2, 6, 23, 0.55);
+}
 #proxy-banner-top,#proxy-banner-bottom {
   position: fixed;
   left: 0;
@@ -877,7 +961,7 @@ func injectBanners(htmlBody string, cfg config.Config) string {
   color: %s;
   text-align: center;
   font-weight: 700;
-  font-family: Arial, sans-serif;
+  font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
   z-index: 2147483000;
 }
 #proxy-banner-top { top: 0; }
@@ -891,6 +975,14 @@ body {
   scroll-padding-top: var(--proxy-banner-height);
   scroll-padding-bottom: var(--proxy-banner-height);
   overflow-y: auto;
+}
+.proxy-standalone {
+  background:
+    radial-gradient(1200px 520px at 10%% -10%%, rgba(45, 212, 191, 0.18), transparent 60%%),
+    radial-gradient(900px 520px at 90%% 0%%, rgba(56, 189, 248, 0.16), transparent 60%%),
+    var(--proxy-bg);
+  color: var(--proxy-text);
+  font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 #root,
 #app,
@@ -906,31 +998,99 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.45);
+  background: rgba(3, 7, 18, 0.65);
+  backdrop-filter: blur(8px);
   z-index: 2147483001;
+  padding: 32px 20px;
 }
 .proxy-agreement-card {
-  background: #fff;
-  padding: 24px;
-  max-width: 520px;
-  width: calc(100%% - 32px);
-  border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
-  font-family: Arial, sans-serif;
+  background: linear-gradient(180deg, var(--proxy-surface), var(--proxy-surface-strong));
+  padding: 28px;
+  max-width: 560px;
+  width: min(560px, 100%%);
+  border-radius: 16px;
+  border: 1px solid var(--proxy-border);
+  box-shadow: var(--proxy-shadow);
+  font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
-.proxy-agreement-card h1 { margin: 0 0 12px; font-size: 20px; }
-.proxy-agreement-card p { margin: 0 0 16px; font-size: 14px; line-height: 1.4; }
-.proxy-agreement-card button {
-  background: %s;
-  color: %s;
+.proxy-agreement-card h1 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.proxy-agreement-card p {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--proxy-muted);
+}
+.proxy-agreement-card strong { color: var(--proxy-text); }
+.proxy-agreement-card pre {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--proxy-border);
+  color: var(--proxy-text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.proxy-agreement-card button,
+.proxy-agreement-card a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--proxy-accent), var(--proxy-accent-strong));
+  color: #05101a;
   border: 0;
-  padding: 8px 16px;
+  padding: 10px 18px;
   font-weight: 700;
+  font-size: 14px;
+  border-radius: 10px;
   cursor: pointer;
+  box-shadow: 0 10px 24px rgba(20, 184, 166, 0.35);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.proxy-agreement-card button:hover,
+.proxy-agreement-card a:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(20, 184, 166, 0.4);
 }
 </style>`, cssSafe(cfg.BannerBgColor), cssSafe(cfg.BannerTextColor), cssSafe(cfg.BannerBgColor), cssSafe(cfg.BannerTextColor))
-	banners := fmt.Sprintf(`%s<div id="proxy-banner-top">%s</div><div id="proxy-banner-bottom">%s</div>`,
-		style, html.EscapeString(cfg.BannerTopText), html.EscapeString(cfg.BannerBottomText))
+	// Script to handle SSO logout: when AnythingLLM's frontend navigates to /sso/simple
+	// without a token (after clicking Sign out), redirect to proxy logout to log out
+	// from both the proxy and Keycloak.
+	ssoScript := `<script>
+(function(){
+  var checking = false;
+  var check = function() {
+    if (checking) return;
+    if (window.location.pathname === '/sso/simple' && !window.location.search.includes('token=')) {
+      checking = true;
+      window.location.href = '/logout';
+    }
+  };
+  check();
+  // Hook pushState and replaceState for SPA navigation
+  var origPush = history.pushState;
+  var origReplace = history.replaceState;
+  history.pushState = function() { origPush.apply(this, arguments); setTimeout(check, 50); };
+  history.replaceState = function() { origReplace.apply(this, arguments); setTimeout(check, 50); };
+  window.addEventListener('popstate', function() { setTimeout(check, 50); });
+  // Fallback: periodic check for URL changes (React Router workaround)
+  var lastPath = window.location.pathname + window.location.search;
+  setInterval(function() {
+    var curPath = window.location.pathname + window.location.search;
+    if (curPath !== lastPath) { lastPath = curPath; check(); }
+  }, 200);
+})();
+</script>`
+	// Use string concatenation to avoid any fmt.Sprintf issues with % in style
+	banners := style + ssoScript + `<div id="proxy-banner-top">` + html.EscapeString(cfg.BannerTopText) + `</div><div id="proxy-banner-bottom">` + html.EscapeString(cfg.BannerBottomText) + `</div>`
 
 	lower := strings.ToLower(htmlBody)
 	if idx := strings.Index(lower, "<body"); idx != -1 {
@@ -949,6 +1109,24 @@ func cssSafe(val string) string {
 		return "#f6f000"
 	}
 	return val
+}
+
+func stringFromSession(sess *sessions.Session, key string) string {
+	if sess == nil || key == "" {
+		return ""
+	}
+	raw, ok := sess.Values[key]
+	if !ok {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case fmt.Stringer:
+		return strings.TrimSpace(v.String())
+	default:
+		return ""
+	}
 }
 
 func isSessionValid(sess *sessions.Session) bool {

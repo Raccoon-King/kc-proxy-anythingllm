@@ -87,11 +87,15 @@ helm_validate:
     - exists:
         - helm/anythingllm/Chart.yaml
         - helm/proxy/Chart.yaml
+        - helm/weaviate/Chart.yaml
   script:
+    - helm dependency update helm/weaviate
     - helm lint helm/anythingllm
     - helm lint helm/proxy
+    - helm lint helm/weaviate
     - helm template helm/anythingllm --namespace posaidon > /tmp/anythingllm.yaml
     - helm template helm/proxy --namespace posaidon > /tmp/proxy.yaml
+    - helm template helm/weaviate --namespace posaidon > /tmp/weaviate.yaml
   needs: ["ai-policy-gate"]
 
 go_test:

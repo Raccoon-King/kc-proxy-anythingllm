@@ -1,0 +1,97 @@
+proxy:
+  image:
+    registry: "harbor.local"
+    repository: "platform/keycloak-proxy-go"
+    tag: "v1.0.0"
+  existingSecret: "anythingllm-proxy"
+  ingress:
+    enabled: true
+    className: "traefik"
+    nameOverride: "proxy"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: "proxy.example.com"
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: proxy-tls
+        hosts:
+          - proxy.example.com
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  networkPolicy:
+    enabled: true
+    policyTypes: ["Ingress", "Egress"]
+    ingress:
+      - from:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 8080
+    egress:
+      - to:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 3001
+      - to:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 8080
+
+anythingllm:
+  image:
+    registry: "harbor.local"
+    repository: "platform/anythingllm"
+    tag: "v1.0.0"
+  existingSecret: "anythingllm"
+  env:
+    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://proxy.example.com/login"
+    WEAVIATE_ENDPOINT: "http://weaviate:80"
+  persistence:
+    storageClass: "fast-storage"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  networkPolicy:
+    enabled: true
+    policyTypes: ["Ingress", "Egress"]
+    ingress:
+      - from:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 3001
+    egress:
+      - to:
+          - namespaceSelector: {}
+        ports:
+          - protocol: TCP
+            port: 80
+
+weaviate:
+  image:
+    tag: "1.34.0"
+  service:
+    type: ClusterIP
+  grpcService:
+    enabled: false
+  initContainers:
+    sysctlInitContainer:
+      enabled: false
+  persistence:
+    storageClass: "fast-storage"
