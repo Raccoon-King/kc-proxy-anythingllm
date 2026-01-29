@@ -1,12 +1,19 @@
 package auth
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestSessionManagerLifecycle(t *testing.T) {
-	mgr := NewSessionManager([]byte("secret"), false)
+	mgr := NewSessionManager([]byte("secret"), SessionOptions{
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   7 * 24 * time.Hour,
+		HttpOnly: true,
+	})
 	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
 

@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: proxy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: oci://192.168.80.1:8443/mapache
+    chart: anythingllm-proxy
+    targetRevision: 1.0.1
+    helm:
+      parameters:
+        - name: namespace
+          value: posaidon
+        - name: image.registry
+          value: 192.168.80.1:8443
+        - name: image.tag
+          value: latest
+        - name: imagePullSecrets[0]
+          value: harbor-pull-secret
+        - name: existingSecret
+          value: anythingllm-proxy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: posaidon
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

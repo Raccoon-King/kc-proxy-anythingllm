@@ -39,3 +39,23 @@ func TestDeriveExternalIssuerDefaultsForInternalHost(t *testing.T) {
 		t.Fatalf("expected passthrough for non-keycloak host")
 	}
 }
+
+func TestValidateProductionChecks(t *testing.T) {
+	cfg := Config{
+		Port:                "8080",
+		Environment:         "production",
+		KeycloakExternalURL: "https://kc.example.com/realms/app",
+		CallbackPath:        "/auth/callback",
+		SessionMaxAgeDays:   7,
+		SessionSecure:       true,
+		MaxHeaderBytes:      1 << 20,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid config, got %v", err)
+	}
+
+	cfg.SessionSecure = false
+	if err := cfg.Validate(); err == nil {
+		t.Fatalf("expected error for insecure session in production")
+	}
+}

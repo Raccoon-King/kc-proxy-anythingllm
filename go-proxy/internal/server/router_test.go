@@ -54,16 +54,30 @@ func (f *fakeLLM) IssueAuthToken(_ context.Context, _ string) (*anythingllm.Auth
 
 func newTestDeps() Dependencies {
 	cfg := config.Config{
-		Port:               "8080",
-		AnythingLLMBaseURL: "http://anythingllm:3001",
-		DefaultRole:        "user",
-		AutoCreateUsers:    true,
-		CallbackPath:       "/auth/callback",
-		SessionSecret:      []byte("secret"),
+		Port:                 "8080",
+		AnythingLLMBaseURL:   "http://anythingllm:3001",
+		DefaultRole:          "user",
+		AutoCreateUsers:      true,
+		CallbackPath:         "/auth/callback",
+		SessionSecret:        []byte("secret"),
+		SessionSameSite:      "lax",
+		SessionMaxAgeDays:    7,
+		SessionHTTPOnly:      true,
+		UpstreamDialTimeout:  5 * time.Second,
+		UpstreamTLSHandshake: 5 * time.Second,
+		UpstreamResponseHdr:  5 * time.Second,
+		UpstreamIdleTimeout:  10 * time.Second,
+		UpstreamMaxIdle:      10,
+		UpstreamMaxIdleHost:  5,
 	}
 	return Dependencies{
-		Cfg:      cfg,
-		Sessions: auth.NewSessionManager(cfg.SessionSecret, false),
+		Cfg: cfg,
+		Sessions: auth.NewSessionManager(cfg.SessionSecret, auth.SessionOptions{
+			Secure:   false,
+			SameSite: cfg.SessionSameSiteMode(),
+			MaxAge:   7 * 24 * time.Hour,
+			HttpOnly: true,
+		}),
 		OIDC: &fakeOIDC{
 			codeURL: "http://keycloak/auth",
 			token: (&oauth2.Token{

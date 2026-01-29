@@ -11,11 +11,14 @@ import (
 	"html"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"anythingllm-proxy/internal/anythingllm"
@@ -25,11 +28,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
-)
-
-const (
-	DefaultReadTimeout  = 15 * time.Second
-	DefaultWriteTimeout = 15 * time.Second
 )
 
 // OIDCClient is the minimal interface needed for login flows.
@@ -51,6 +49,7 @@ type Dependencies struct {
 	Sessions *auth.SessionManager
 	OIDC     OIDCClient
 	LLM      LLMClient
+	Ready    func(ctx context.Context) error
 	// Feature flags (used only in tests or optional behaviors)
 	DisableAgreement bool
 }
@@ -60,6 +59,8 @@ type Dependencies struct {
 func NewRouter(d Dependencies) http.Handler {
 	proxy := newReverseProxy(d.Cfg)
 	idTokenCache := newTokenCache()
+	metrics := newMetrics(d.Cfg.MetricsEnabled)
+	limiter := newRateLimiter(d.Cfg.RateLimitPerMinute, d.Cfg.RateLimitBurst)
 	secLog := func(format string, args ...interface{}) {
 		if d.Cfg.SecurityLogging {
 			log.Printf("[SEC] "+format, args...)
@@ -77,6 +78,35 @@ func NewRouter(d Dependencies) http.Handler {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// Readiness check - optional upstream validation
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if !d.Cfg.ReadinessChecks || d.Ready == nil {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), d.Cfg.ReadinessTimeout)
+		defer cancel()
+		if err := d.Ready(ctx); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"not_ready"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// Metrics endpoint (optional)
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !d.Cfg.MetricsEnabled {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(metrics.Render()))
 	})
 
 	// Debug endpoint - dump session state
@@ -423,7 +453,20 @@ func NewRouter(d Dependencies) http.Handler {
 		proxy.ServeHTTP(w, r)
 	})
 
-	return logging(mux)
+	handler := http.Handler(mux)
+	if limiter != nil {
+		handler = withRateLimit(handler, limiter)
+	}
+	if d.Cfg.SecurityHeaders {
+		handler = withSecurityHeaders(handler, d.Cfg)
+	}
+	if metrics != nil {
+		handler = withMetrics(handler, metrics)
+	}
+	if d.Cfg.AccessLogging {
+		handler = withAccessLog(handler)
+	}
+	return handler
 }
 
 // --- helpers ---
@@ -470,16 +513,215 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 		resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(injected)))
 		return nil
 	}
+	proxy.Transport = &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: cfg.UpstreamDialTimeout, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   cfg.UpstreamTLSHandshake,
+		ResponseHeaderTimeout: cfg.UpstreamResponseHdr,
+		IdleConnTimeout:       cfg.UpstreamIdleTimeout,
+		MaxIdleConns:          cfg.UpstreamMaxIdle,
+		MaxIdleConnsPerHost:   cfg.UpstreamMaxIdleHost,
+	}
 	proxy.FlushInterval = 100 * time.Millisecond
 	return proxy
 }
 
-func logging(next http.Handler) http.Handler {
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func (s *statusRecorder) Write(b []byte) (int, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	n, err := s.ResponseWriter.Write(b)
+	s.size += n
+	return n, err
+}
+
+func withAccessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/healthz") || strings.HasPrefix(r.URL.Path, "/readyz") || strings.HasPrefix(r.URL.Path, "/metrics") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		rec := &statusRecorder{ResponseWriter: w}
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		_ = time.Since(start)
+		requestID := r.Header.Get("X-Request-Id")
+		if requestID == "" {
+			requestID = randomString(12)
+			rec.Header().Set("X-Request-Id", requestID)
+		}
+		next.ServeHTTP(rec, r)
+		duration := time.Since(start)
+		log.Printf("%s %s %s %d %d %s", clientIP(r), r.Method, r.URL.Path, rec.status, rec.size, duration)
 	})
+}
+
+func withSecurityHeaders(next http.Handler, cfg config.Config) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if cfg.HeaderFrameOptions != "" {
+			w.Header().Set("X-Frame-Options", cfg.HeaderFrameOptions)
+		}
+		if cfg.HeaderReferrerPolicy != "" {
+			w.Header().Set("Referrer-Policy", cfg.HeaderReferrerPolicy)
+		}
+		if cfg.HeaderPermissions != "" {
+			w.Header().Set("Permissions-Policy", cfg.HeaderPermissions)
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if cfg.HeaderCSP != "" {
+			w.Header().Set("Content-Security-Policy", cfg.HeaderCSP)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+type metricsState struct {
+	enabled  bool
+	inflight int64
+	total    uint64
+	errors   uint64
+	mu       sync.Mutex
+	byCode   map[int]int64
+}
+
+func newMetrics(enabled bool) *metricsState {
+	if !enabled {
+		return nil
+	}
+	return &metricsState{enabled: true, byCode: make(map[int]int64)}
+}
+
+func (m *metricsState) Render() string {
+	if m == nil || !m.enabled {
+		return ""
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var b strings.Builder
+	b.WriteString("# TYPE proxy_requests_total counter\n")
+	b.WriteString("proxy_requests_total " + strconv.FormatUint(atomic.LoadUint64(&m.total), 10) + "\n")
+	b.WriteString("# TYPE proxy_requests_inflight gauge\n")
+	b.WriteString("proxy_requests_inflight " + strconv.FormatInt(atomic.LoadInt64(&m.inflight), 10) + "\n")
+	b.WriteString("# TYPE proxy_requests_errors_total counter\n")
+	b.WriteString("proxy_requests_errors_total " + strconv.FormatUint(atomic.LoadUint64(&m.errors), 10) + "\n")
+	for code, count := range m.byCode {
+		b.WriteString(fmt.Sprintf("proxy_requests_status_total{code=\"%d\"} %d\n", code, count))
+	}
+	return b.String()
+}
+
+func withMetrics(next http.Handler, m *metricsState) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if m == nil || !m.enabled {
+			next.ServeHTTP(w, r)
+			return
+		}
+		atomic.AddInt64(&m.inflight, 1)
+		atomic.AddUint64(&m.total, 1)
+		rec := &statusRecorder{ResponseWriter: w}
+		next.ServeHTTP(rec, r)
+		atomic.AddInt64(&m.inflight, -1)
+		code := rec.status
+		if code == 0 {
+			code = http.StatusOK
+		}
+		if code >= 500 {
+			atomic.AddUint64(&m.errors, 1)
+		}
+		m.mu.Lock()
+		m.byCode[code]++
+		m.mu.Unlock()
+	})
+}
+
+type rateLimiter struct {
+	perMinute int
+	burst     int
+	mu        sync.Mutex
+	buckets   map[string]*rateBucket
+}
+
+type rateBucket struct {
+	windowStart time.Time
+	count       int
+}
+
+func newRateLimiter(perMinute, burst int) *rateLimiter {
+	if perMinute <= 0 {
+		return nil
+	}
+	if burst < 0 {
+		burst = 0
+	}
+	return &rateLimiter{perMinute: perMinute, burst: burst, buckets: make(map[string]*rateBucket)}
+}
+
+func (l *rateLimiter) allow(key string) bool {
+	now := time.Now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b, ok := l.buckets[key]
+	if !ok {
+		l.buckets[key] = &rateBucket{windowStart: now, count: 1}
+		return true
+	}
+	if now.Sub(b.windowStart) >= time.Minute {
+		b.windowStart = now
+		b.count = 1
+		return true
+	}
+	limit := l.perMinute + l.burst
+	if b.count >= limit {
+		return false
+	}
+	b.count++
+	return true
+}
+
+func withRateLimit(next http.Handler, limiter *rateLimiter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if limiter == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		key := clientIP(r)
+		if key == "" {
+			key = "unknown"
+		}
+		if !limiter.allow(key) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte("rate limit exceeded"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func clientIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return realIP
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func pickName(c *auth.TokenClaims) string {
