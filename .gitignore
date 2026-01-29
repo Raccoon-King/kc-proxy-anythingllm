@@ -21,6 +21,9 @@ data/*
 # Docker overrides
 docker-compose.override.yml
 
+# Trivy caches
+.trivy/
+
 # Editors/OS
 .DS_Store
 Thumbs.db

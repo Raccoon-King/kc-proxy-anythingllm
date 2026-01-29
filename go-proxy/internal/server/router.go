@@ -640,7 +640,24 @@ func injectBanners(htmlBody string, cfg config.Config) string {
 }
 #proxy-banner-top { top: 0; }
 #proxy-banner-bottom { bottom: 0; }
-body { padding-top: var(--proxy-banner-height); padding-bottom: var(--proxy-banner-height); }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  padding-top: var(--proxy-banner-height);
+  padding-bottom: var(--proxy-banner-height);
+  box-sizing: border-box;
+  scroll-padding-top: var(--proxy-banner-height);
+  scroll-padding-bottom: var(--proxy-banner-height);
+  overflow-y: auto;
+}
+#root,
+#app,
+main {
+  min-height: calc(100vh - (var(--proxy-banner-height) * 2));
+  height: auto;
+  max-height: none;
+  overflow: visible !important;
+}
 .proxy-agreement-modal {
   position: fixed;
   inset: 0;
