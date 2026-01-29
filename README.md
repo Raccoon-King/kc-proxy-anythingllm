@@ -43,13 +43,19 @@ Browse to http://localhost:8080 and log in.
 - OIDC endpoints: issuer `http://localhost:8180/realms/mapache`, auth `/protocol/openid-connect/auth`, token `/token`, JWKS `/certs`. Client secret for dev: `7HMLGYoxhKIjmOQZkK9Bp1z3oamucLIc`.
 
 ## Configuration (proxy)
-- Core: `PORT` (8080), `ANYLLM_URL` (http://anythingllm:3001), `ANYLLM_API_KEY` (required), `ANYLLM_AUTO_CREATE` (default true), `ANYLLM_DEFAULT_ROLE` (user)
+- Core: `PORT` (8080), `APP_ENV` (development), `ANYLLM_URL` (http://anythingllm:3001), `ANYLLM_API_KEY` (required), `ANYLLM_AUTO_CREATE` (default true), `ANYLLM_DEFAULT_ROLE` (user)
 - Keycloak: `KEYCLOAK_ISSUER_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_REDIRECT_URL` (default http://localhost:8080/auth/callback), `KEYCLOAK_CA_PATH`, `KEYCLOAK_INSECURE_SKIP_VERIFY`
   - Use `KEYCLOAK_EXTERNAL_URL` for the browser-facing realm URL (e.g., `http://localhost:8180/realms/mapache`); otherwise the proxy may redirect to the internal hostname (e.g., `http://keycloak:8080/`).
-- Sessions/UI: `SESSION_SECRET` (required), `SESSION_SECURE` (false for http dev)
+- Sessions/UI: `SESSION_SECRET` (required), `SESSION_SECURE` (false for http dev), `SESSION_SAMESITE` (lax/strict/none), `SESSION_MAX_AGE_DAYS` (7), `SESSION_HTTP_ONLY` (true)
 - Banners: `BANNER_TOP_TEXT`, `BANNER_BOTTOM_TEXT`, `BANNER_BG_COLOR`, `BANNER_TEXT_COLOR`
 - Agreement (can be disabled): `AGREEMENT_TITLE`, `AGREEMENT_BODY`, `AGREEMENT_BUTTON_TEXT`, `DISABLE_AGREEMENT` (default false)
-- Logging: `DEBUG_LOGGING` (false), `SECURITY_LOGGING` (true), `DEBUG_HTTP` (true to log upstream calls)
+- Logging/metrics: `ACCESS_LOGGING` (true), `DEBUG_LOGGING` (false), `SECURITY_LOGGING` (true), `DEBUG_HTTP` (true to log upstream calls), `METRICS_ENABLED` (false)
+- Readiness: `READINESS_CHECKS` (false), `READINESS_URL` (required if enabled), `READINESS_TIMEOUT` (2s)
+- Security headers: `SECURITY_HEADERS` (true), `HEADER_FRAME_OPTIONS`, `HEADER_REFERRER_POLICY`, `HEADER_PERMISSIONS`, `HEADER_CSP`
+- Rate limiting: `RATE_LIMIT_PER_MIN` (0 disables), `RATE_LIMIT_BURST` (0)
+- Timeouts/retries: `READ_TIMEOUT`, `WRITE_TIMEOUT`, `READ_HEADER_TIMEOUT`, `IDLE_TIMEOUT`, `SHUTDOWN_TIMEOUT`, `MAX_HEADER_BYTES`,
+  `UPSTREAM_DIAL_TIMEOUT`, `UPSTREAM_TLS_HANDSHAKE_TIMEOUT`, `UPSTREAM_RESPONSE_HEADER_TIMEOUT`, `UPSTREAM_IDLE_TIMEOUT`,
+  `UPSTREAM_MAX_IDLE_CONNS`, `UPSTREAM_MAX_IDLE_CONNS_PER_HOST`, `ANYLLM_HTTP_TIMEOUT`, `ANYLLM_RETRY_MAX`, `ANYLLM_RETRY_BACKOFF`
 
 ### Environment variables (proxy)
 | Name | Default | Notes |
@@ -58,6 +64,7 @@ Browse to http://localhost:8080 and log in.
 | `ANYLLM_URL` | `http://anythingllm:3001` | Base URL for proxy→AnythingLLM calls. |
 | `ANYLLM_AUTO_CREATE` | `true` | Auto-create users in AnythingLLM if missing. |
 | `ANYLLM_DEFAULT_ROLE` | `user` | Default role on auto-create. |
+| `APP_ENV` | `development` | Set to `production` to enforce stricter validation. |
 | `KEYCLOAK_ISSUER_URL` | _required_ | Internal URL for proxy→Keycloak (matches realm issuer). |
 | `KEYCLOAK_EXTERNAL_URL` | issuer | Public URL for browser redirects if different from issuer. |
 | `KEYCLOAK_CLIENT_ID` | _required_ | Client configured in Keycloak (e.g., `mapache-client`). |
@@ -65,9 +72,21 @@ Browse to http://localhost:8080 and log in.
 | `KEYCLOAK_REDIRECT_URL` | `http://localhost:8080/auth/callback` | Must be allowed in Keycloak client redirects. |
 | `SESSION_SECRET` | _required_ | HMAC key for `anythingllm_proxy` session cookie. |
 | `SESSION_SECURE` | `false` | Set `true` in HTTPS deployments. |
+| `SESSION_SAMESITE` | `lax` | `lax`, `strict`, or `none` (`none` requires `SESSION_SECURE=true`). |
+| `SESSION_MAX_AGE_DAYS` | `7` | Session cookie max age. |
+| `SESSION_HTTP_ONLY` | `true` | Enforce HttpOnly on session cookie. |
 | `BANNER_*`, `AGREEMENT_*` | defaults shown above | Optional UI banners and agreement gate. |
+| `ACCESS_LOGGING` | `true` | Log request access lines. |
 | `DEBUG_LOGGING` | `false` | Set `true` for verbose proxy logs. |
 | `KEYCLOAK_CA_PATH` | _empty_ | PEM bundle for Keycloak TLS; use with `KEYCLOAK_INSECURE_SKIP_VERIFY=false`. |
+| `METRICS_ENABLED` | `false` | Enable `/metrics` endpoint. |
+| `READINESS_CHECKS` | `false` | Enable `/readyz` checks. |
+| `READINESS_URL` | _empty_ | URL to check when readiness is enabled. |
+| `RATE_LIMIT_PER_MIN` | `0` | Per-IP request limit per minute (0 disables). |
+| `RATE_LIMIT_BURST` | `0` | Extra burst allowed beyond per-minute limit. |
+| `ANYLLM_HTTP_TIMEOUT` | `10s` | Timeout for AnythingLLM admin API calls. |
+| `ANYLLM_RETRY_MAX` | `0` | Retry count for AnythingLLM GET calls. |
+| `ANYLLM_RETRY_BACKOFF` | `200ms` | Initial retry backoff for AnythingLLM GET calls. |
 
 ## AnythingLLM settings
 Create `data/.env` (mounted to `/app/server/.env` inside the container) with at least:
@@ -82,6 +101,11 @@ See AnythingLLM docs for additional keys: https://docs.anythingllm.com/
 - State mismatch in callback → clear proxy session + redirect to Keycloak RP logout, then restart.
 - AnythingLLM 401/403 or login redirect → proxy clears its cookie and restarts login.
 - Logged-in KC but logged-out AnythingLLM → caught by the above restart logic.
+
+## Operational endpoints
+- `GET /healthz` — liveness
+- `GET /readyz` — readiness (optional, enable with `READINESS_CHECKS=true`)
+- `GET /metrics` — Prometheus-style metrics (optional, enable with `METRICS_ENABLED=true`)
 
 ## Banners & agreement
 - Banners are injected into every HTML response from AnythingLLM.
@@ -102,6 +126,15 @@ go test ./...
 go run ./cmd/server   # uses env vars
 ```
 Docker builds via `go-proxy/Dockerfile`; `docker compose up -d --build` to rebuild the proxy container.
+
+## Helm charts (Rancher + Argo)
+Charts live under `helm/`:
+- `helm/anythingllm`
+- `helm/proxy`
+
+By default charts target the `posaidon` namespace (override `namespace` in values).
+Images should point to Harbor (set `image.registry` / `image.repository` / `image.tag` in each chart).
+Proxy secrets are provided via `secretEnv` or `existingSecret`.
 
 ## Troubleshooting
 - `ERR_TOO_MANY_REDIRECTS`: clear `anythingllm_proxy` cookie or hit `/logout`; stale state/codes will be bounced now.

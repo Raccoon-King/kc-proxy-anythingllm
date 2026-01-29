@@ -1,0 +1,112 @@
+nameOverride: ""
+fullnameOverride: ""
+namespace: posaidon
+
+image:
+  registry: harbor.localhost
+  repository: mapache/keycloak-proxy-go
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+env:
+  PORT: "8080"
+  ANYLLM_URL: "http://anythingllm:3001"
+  ANYLLM_AUTO_CREATE: "false"
+  ANYLLM_DEFAULT_ROLE: "user"
+  KEYCLOAK_ISSUER_URL: "http://keycloak-dev.auth:8080/realms/mapache"
+  KEYCLOAK_CLIENT_ID: "mapache-client"
+  KEYCLOAK_REDIRECT_URL: "http://proxy.localhost/auth/callback"
+  KEYCLOAK_EXTERNAL_URL: "http://keycloak.localhost/realms/mapache"
+  SESSION_SECURE: "false"
+  SESSION_SAMESITE: "lax"
+  SESSION_MAX_AGE_DAYS: "7"
+  SESSION_HTTP_ONLY: "true"
+  READ_TIMEOUT: "15s"
+  WRITE_TIMEOUT: "15s"
+  READ_HEADER_TIMEOUT: "5s"
+  IDLE_TIMEOUT: "60s"
+  SHUTDOWN_TIMEOUT: "10s"
+  MAX_HEADER_BYTES: "1048576"
+  UPSTREAM_DIAL_TIMEOUT: "10s"
+  UPSTREAM_TLS_HANDSHAKE_TIMEOUT: "10s"
+  UPSTREAM_RESPONSE_HEADER_TIMEOUT: "15s"
+  UPSTREAM_IDLE_TIMEOUT: "60s"
+  UPSTREAM_MAX_IDLE_CONNS: "100"
+  UPSTREAM_MAX_IDLE_CONNS_PER_HOST: "10"
+  ANYLLM_HTTP_TIMEOUT: "10s"
+  ANYLLM_RETRY_MAX: "0"
+  ANYLLM_RETRY_BACKOFF: "200ms"
+  ACCESS_LOGGING: "true"
+  DEBUG_LOGGING: "false"
+  SECURITY_LOGGING: "true"
+  DEBUG_HTTP: "false"
+  METRICS_ENABLED: "false"
+  READINESS_CHECKS: "false"
+  READINESS_URL: ""
+  READINESS_TIMEOUT: "2s"
+  SECURITY_HEADERS: "true"
+  HEADER_FRAME_OPTIONS: "SAMEORIGIN"
+  HEADER_REFERRER_POLICY: "strict-origin-when-cross-origin"
+  HEADER_CSP: ""
+  HEADER_PERMISSIONS: "geolocation=(), microphone=(), camera=()"
+  RATE_LIMIT_PER_MIN: "0"
+  RATE_LIMIT_BURST: "0"
+
+secretEnv:
+  ANYLLM_API_KEY: ""
+  KEYCLOAK_CLIENT_SECRET: ""
+  SESSION_SECRET: ""
+
+existingSecret: ""
+
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations: {}
+  hosts:
+    - host: proxy.localhost
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 5
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 5
