@@ -20,7 +20,7 @@
       - PORT=8080
       - ANYLLM_URL=http://anythingllm:3001
       - ANYLLM_API_KEY=${ANYLLM_API_KEY:-XN6FD4N-26N4BXR-JXS1DT9-F2D8MHT}
-      - ANYLLM_AUTO_CREATE=true
+      - ANYLLM_AUTO_CREATE=false
       - ANYLLM_DEFAULT_ROLE=user
       # Internal URL for proxy->Keycloak communication (via shared Docker network)
       - KEYCLOAK_ISSUER_URL=${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/mapache}

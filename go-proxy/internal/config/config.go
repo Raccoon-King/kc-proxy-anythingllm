@@ -33,6 +33,17 @@ type Config struct {
 	AgreementTitle       string
 	AgreementBody        string
 	AgreementButtonText  string
+	AccessRequestSubject string
+	AccessRequestContact string
+	AccessRequestTitle   string
+	AccessRequestBody    string
+	AccessRequestPrompt  string
+	AccessRequestContactLabel string
+	AccessRequestSubjectLabel string
+	AccessRequestSignOutText  string
+	LoggedOutTitle       string
+	LoggedOutBody        string
+	LoggedOutLinkText    string
 	KeycloakCAPath       string
 	KeycloakInsecureSkip bool
 	DebugLogging         bool
@@ -84,6 +95,17 @@ func Load() Config {
 		AgreementTitle:       getenv("AGREEMENT_TITLE", "User Agreement"),
 		AgreementBody:        getenv("AGREEMENT_BODY", "Please acknowledge and accept this agreement to continue."),
 		AgreementButtonText:  getenv("AGREEMENT_BUTTON_TEXT", "OK"),
+		AccessRequestSubject: getenv("ACCESS_REQUEST_SUBJECT", "AnythingLLM access request"),
+		AccessRequestContact: getenv("ACCESS_REQUEST_CONTACT", "helpdesk@help.com"),
+		AccessRequestTitle:   getenv("ACCESS_REQUEST_TITLE", "Access required"),
+		AccessRequestBody:    getenv("ACCESS_REQUEST_BODY", "%s does not have an AnythingLLM account."),
+		AccessRequestPrompt:  getenv("ACCESS_REQUEST_PROMPT", "Paste this in an email to the helpdesk:"),
+		AccessRequestContactLabel: getenv("ACCESS_REQUEST_CONTACT_LABEL", "Contact:"),
+		AccessRequestSubjectLabel: getenv("ACCESS_REQUEST_SUBJECT_LABEL", "Use this subject line:"),
+		AccessRequestSignOutText:  getenv("ACCESS_REQUEST_SIGNOUT_TEXT", "Sign out"),
+		LoggedOutTitle:       getenv("LOGGED_OUT_TITLE", "Signed out"),
+		LoggedOutBody:        getenv("LOGGED_OUT_BODY", "You have been signed out."),
+		LoggedOutLinkText:    getenv("LOGGED_OUT_LINK_TEXT", "Sign in again"),
 		KeycloakCAPath:       getenv("KEYCLOAK_CA_PATH", ""),
 		KeycloakInsecureSkip: getenv("KEYCLOAK_INSECURE_SKIP_VERIFY", "false") == "true",
 		DebugLogging:         getenv("DEBUG_LOGGING", "false") == "true",

@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var ErrUserNotFound = errors.New("anythingllm user not found")
+
 // Client handles admin calls to AnythingLLM API.
 type Client struct {
 	baseURL string
@@ -84,7 +86,7 @@ func (c *Client) EnsureUser(ctx context.Context, email, name, role string, allow
 	}
 
 	if !allowCreate {
-		return "", fmt.Errorf("user %s not found and auto-create disabled", email)
+		return "", ErrUserNotFound
 	}
 
 	payload := map[string]string{
@@ -163,7 +165,7 @@ func (c *Client) findUserID(ctx context.Context, email string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("user not found in AnythingLLM for %s", email)
+	return "", ErrUserNotFound
 }
 
 // IssueAuthToken requests a Simple SSO token for a user ID.

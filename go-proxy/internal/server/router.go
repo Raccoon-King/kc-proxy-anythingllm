@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -172,6 +173,17 @@ func NewRouter(d Dependencies) http.Handler {
 		http.Redirect(w, r, next, http.StatusFound)
 	})
 
+	// Access request page (no auth required)
+	mux.HandleFunc("/access-request", func(w http.ResponseWriter, r *http.Request) {
+		sess, _ := d.Sessions.Get(r)
+		email, _ := sess.Values["access_request_email"].(string)
+		name, _ := sess.Values["access_request_name"].(string)
+		username, _ := sess.Values["access_request_username"].(string)
+		subject, _ := sess.Values["access_request_sub"].(string)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(renderAccessRequestPage(d.Cfg, email, name, username, subject)))
+	})
+
 	// Logged-out page (no auth required)
 	mux.HandleFunc("/logged-out", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -276,7 +288,7 @@ func NewRouter(d Dependencies) http.Handler {
 		sess.Values["name"] = pickName(claims)
 		sess.Values["agreement_accepted"] = false
 
-		// Determine login ID
+		// Determine login ID (used for logs and fallback)
 		loginID := claims.Email
 		if claims.PreferredUsername != "" {
 			loginID = claims.PreferredUsername
@@ -285,9 +297,22 @@ func NewRouter(d Dependencies) http.Handler {
 			loginID = claims.Subject + "@oidc.local"
 		}
 
-		// Sync user with AnythingLLM
-		userID, err := d.LLM.EnsureUser(r.Context(), loginID, pickName(claims), d.Cfg.DefaultRole, d.Cfg.AutoCreateUsers)
+		// Sync user with AnythingLLM (prefer email for lookup/creation)
+		ensureEmail := claims.Email
+		if ensureEmail == "" {
+			ensureEmail = loginID
+		}
+		userID, err := d.LLM.EnsureUser(r.Context(), ensureEmail, pickName(claims), d.Cfg.DefaultRole, d.Cfg.AutoCreateUsers)
 		if err != nil {
+			if errors.Is(err, anythingllm.ErrUserNotFound) {
+				sess.Values["access_request_email"] = claims.Email
+				sess.Values["access_request_name"] = pickName(claims)
+				sess.Values["access_request_username"] = claims.PreferredUsername
+				sess.Values["access_request_sub"] = claims.Subject
+				_ = d.Sessions.Save(r, w, sess)
+				http.Redirect(w, r, "/access-request", http.StatusFound)
+				return
+			}
 			secLog("ensure user failed loginID=%s: %v", loginID, err)
 			http.Error(w, "failed to sync user", http.StatusBadGateway)
 			return
@@ -486,14 +511,97 @@ func renderAgreementPage(cfg config.Config) string {
 }
 
 func renderLoggedOutPage(cfg config.Config) string {
-	body := `
+	title := strings.TrimSpace(cfg.LoggedOutTitle)
+	if title == "" {
+		title = "Signed out"
+	}
+	msg := strings.TrimSpace(cfg.LoggedOutBody)
+	if msg == "" {
+		msg = "You have been signed out."
+	}
+	linkText := strings.TrimSpace(cfg.LoggedOutLinkText)
+	if linkText == "" {
+		linkText = "Sign in again"
+	}
+	body := fmt.Sprintf(`
 <div class="proxy-agreement-modal">
   <div class="proxy-agreement-card">
-    <h1>Signed out</h1>
-    <p>You have been signed out.</p>
-    <a href="/login">Sign in again</a>
+    <h1>%s</h1>
+    <p>%s</p>
+    <a href="/login">%s</a>
   </div>
-</div>`
+</div>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
+	return injectBanners(agreementHTML(body), cfg)
+}
+
+func renderAccessRequestPage(cfg config.Config, email, name, username, subject string) string {
+	display := strings.TrimSpace(name)
+	if display == "" {
+		display = strings.TrimSpace(email)
+	}
+	if display == "" {
+		display = "Unknown user"
+	}
+	subjectLine := strings.TrimSpace(cfg.AccessRequestSubject)
+	if subjectLine == "" {
+		subjectLine = "AnythingLLM access request"
+	}
+	contactLine := strings.TrimSpace(cfg.AccessRequestContact)
+	if contactLine == "" {
+		contactLine = "helpdesk@help.com"
+	}
+	title := strings.TrimSpace(cfg.AccessRequestTitle)
+	if title == "" {
+		title = "Access required"
+	}
+	bodyTemplate := strings.TrimSpace(cfg.AccessRequestBody)
+	if bodyTemplate == "" {
+		bodyTemplate = "%s does not have an AnythingLLM account."
+	}
+	prompt := strings.TrimSpace(cfg.AccessRequestPrompt)
+	if prompt == "" {
+		prompt = "Paste this in an email to the helpdesk:"
+	}
+	contactLabel := strings.TrimSpace(cfg.AccessRequestContactLabel)
+	if contactLabel == "" {
+		contactLabel = "Contact:"
+	}
+	subjectLabel := strings.TrimSpace(cfg.AccessRequestSubjectLabel)
+	if subjectLabel == "" {
+		subjectLabel = "Use this subject line:"
+	}
+	signOutText := strings.TrimSpace(cfg.AccessRequestSignOutText)
+	if signOutText == "" {
+		signOutText = "Sign out"
+	}
+	infoLines := []string{
+		"Name: " + strings.TrimSpace(name),
+		"Email: " + strings.TrimSpace(email),
+		"Username: " + strings.TrimSpace(username),
+		"Keycloak Subject: " + strings.TrimSpace(subject),
+	}
+	// Remove empty fields while keeping labels clean.
+	clean := make([]string, 0, len(infoLines))
+	for _, line := range infoLines {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[1]) == "" {
+			continue
+		}
+		clean = append(clean, line)
+	}
+	joined := html.EscapeString(strings.Join(clean, "\n"))
+	body := fmt.Sprintf(`
+<div class="proxy-agreement-modal">
+  <div class="proxy-agreement-card">
+    <h1>%s</h1>
+    <p>%s</p>
+    <p><strong>%s</strong> %s</p>
+    <p><strong>%s</strong> %s</p>
+    <p><strong>%s</strong></p>
+    <pre>%s</pre>
+    <a href="/logout">%s</a>
+  </div>
+</div>`, html.EscapeString(title), html.EscapeString(fmt.Sprintf(bodyTemplate, display)), html.EscapeString(subjectLabel), html.EscapeString(subjectLine), html.EscapeString(contactLabel), html.EscapeString(contactLine), html.EscapeString(prompt), joined, html.EscapeString(signOutText))
 	return injectBanners(agreementHTML(body), cfg)
 }
 
