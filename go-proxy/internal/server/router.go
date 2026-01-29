@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"anythingllm-proxy/internal/anythingllm"
@@ -57,6 +58,7 @@ type Dependencies struct {
 // Flow: Agreement (pre-auth) → Keycloak Auth → App
 func NewRouter(d Dependencies) http.Handler {
 	proxy := newReverseProxy(d.Cfg)
+	idTokenCache := newTokenCache()
 	secLog := func(format string, args ...interface{}) {
 		if d.Cfg.SecurityLogging {
 			log.Printf("[SEC] "+format, args...)
@@ -170,6 +172,12 @@ func NewRouter(d Dependencies) http.Handler {
 		http.Redirect(w, r, next, http.StatusFound)
 	})
 
+	// Logged-out page (no auth required)
+	mux.HandleFunc("/logged-out", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(renderLoggedOutPage(d.Cfg)))
+	})
+
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
@@ -210,6 +218,7 @@ func NewRouter(d Dependencies) http.Handler {
 		expectedState, _ := sess.Values["oauth_state"].(string)
 		if expectedState == "" || expectedState != state {
 			secLog("state mismatch session=%v incoming=%s", sess.Values["oauth_state"], state)
+			clearIDTokenCache(sess, idTokenCache)
 			_ = d.Sessions.Clear(r, w)
 			http.Redirect(w, r, keycloakLogoutURL(d.Cfg), http.StatusFound)
 			return
@@ -254,6 +263,7 @@ func NewRouter(d Dependencies) http.Handler {
 		dbgLog("kc id_token claims=%s", decodeJWTClaims(rawIDToken))
 
 		// Store only small identity/session fields to avoid cookie bloat.
+		storeIDToken(sess, idTokenCache, rawIDToken)
 		expiry := token.Expiry
 		if idToken != nil && !idToken.Expiry.IsZero() {
 			expiry = idToken.Expiry
@@ -314,20 +324,26 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Logout
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		sess, _ := d.Sessions.Get(r)
+		idToken := getIDToken(sess, idTokenCache)
+		clearIDTokenCache(sess, idTokenCache)
 		_ = d.Sessions.Clear(r, w)
 		secLog("logout local session cleared")
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
 	})
 
 	// Main catch-all route - requires agreement + auth
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.ToLower(r.URL.Path)
+		sess, _ := d.Sessions.Get(r)
 
 		// Handle logout paths early to avoid hanging on downstream redirects.
 		if strings.Contains(path, "logout") {
+			idToken := getIDToken(sess, idTokenCache)
+			clearIDTokenCache(sess, idTokenCache)
 			_ = d.Sessions.Clear(r, w)
 			secLog("logout requested; local session cleared path=%s", r.URL.Path)
-			http.Redirect(w, r, "/login?redirect=%2F", http.StatusFound)
+			http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
 			return
 		}
 
@@ -336,7 +352,8 @@ func NewRouter(d Dependencies) http.Handler {
 			strings.HasSuffix(path, ".jpg") || strings.HasSuffix(path, ".svg") ||
 			strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".js") ||
 			strings.HasSuffix(path, ".woff") || strings.HasSuffix(path, ".woff2") ||
-			path == "/manifest.json" || path == "/asset-manifest.json" {
+			path == "/manifest.json" || path == "/asset-manifest.json" ||
+			strings.HasPrefix(path, "/.well-known/") {
 			proxy.ServeHTTP(w, r)
 			return
 		}
@@ -344,9 +361,11 @@ func NewRouter(d Dependencies) http.Handler {
 		// Allow AnythingLLM's SSO/API endpoints through with a guard for missing token
 		if strings.HasPrefix(path, "/sso/") {
 			if r.URL.Query().Get("token") == "" {
-				dbgLog("sso request without token, redirecting to login")
+				dbgLog("sso request without token, logging out of keycloak")
+				idToken := getIDToken(sess, idTokenCache)
+				clearIDTokenCache(sess, idTokenCache)
 				_ = d.Sessions.Clear(r, w)
-				http.Redirect(w, r, "/login?redirect=%2F", http.StatusFound)
+				http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
 				return
 			}
 			dbgLog("allowing SSO path through without proxy auth: %s", path)
@@ -358,8 +377,6 @@ func NewRouter(d Dependencies) http.Handler {
 			proxy.ServeHTTP(w, r)
 			return
 		}
-
-		sess, _ := d.Sessions.Get(r)
 
 		// Check authentication first
 		if !isSessionValid(sess) {
@@ -465,6 +482,18 @@ func renderAgreementPage(cfg config.Config) string {
   </div>
 </div>
 `, html.EscapeString(cfg.AgreementTitle), html.EscapeString(cfg.AgreementBody), html.EscapeString(cfg.AgreementButtonText))
+	return injectBanners(agreementHTML(body), cfg)
+}
+
+func renderLoggedOutPage(cfg config.Config) string {
+	body := `
+<div class="proxy-agreement-modal">
+  <div class="proxy-agreement-card">
+    <h1>Signed out</h1>
+    <p>You have been signed out.</p>
+    <a href="/login">Sign in again</a>
+  </div>
+</div>`
 	return injectBanners(agreementHTML(body), cfg)
 }
 
@@ -592,6 +621,79 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
+type tokenCache struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func newTokenCache() *tokenCache {
+	return &tokenCache{m: make(map[string]string)}
+}
+
+func (c *tokenCache) Get(key string) (string, bool) {
+	if key == "" {
+		return "", false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	val, ok := c.m[key]
+	return val, ok
+}
+
+func (c *tokenCache) Set(key, val string) {
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if val == "" {
+		delete(c.m, key)
+		return
+	}
+	c.m[key] = val
+}
+
+func (c *tokenCache) Delete(key string) {
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.m, key)
+}
+
+func storeIDToken(sess *sessions.Session, cache *tokenCache, raw string) {
+	if sess == nil || cache == nil || raw == "" {
+		return
+	}
+	if key, _ := sess.Values["id_token_key"].(string); key != "" {
+		cache.Delete(key)
+	}
+	key := randomString(24)
+	sess.Values["id_token_key"] = key
+	cache.Set(key, raw)
+}
+
+func getIDToken(sess *sessions.Session, cache *tokenCache) string {
+	if sess == nil || cache == nil {
+		return ""
+	}
+	key, _ := sess.Values["id_token_key"].(string)
+	val, _ := cache.Get(key)
+	return val
+}
+
+func clearIDTokenCache(sess *sessions.Session, cache *tokenCache) {
+	if sess == nil || cache == nil {
+		return
+	}
+	key, _ := sess.Values["id_token_key"].(string)
+	if key != "" {
+		cache.Delete(key)
+	}
+	delete(sess.Values, "id_token_key")
+}
+
 func sanitizeRedirect(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -652,6 +754,20 @@ func keycloakLogoutURL(cfg config.Config) string {
 	}
 	return fmt.Sprintf("%s/protocol/openid-connect/logout?client_id=%s&redirect_uri=%s",
 		base, url.QueryEscape(cfg.KeycloakClientID), url.QueryEscape(redirect))
+}
+
+func keycloakLogoutURLWithHint(cfg config.Config, idToken string) string {
+	base := strings.TrimSuffix(cfg.KeycloakExternalURL, "/")
+	redirect := cfg.KeycloakRedirectURL
+	if redirect == "" {
+		redirect = "http://localhost:" + cfg.Port + "/"
+	}
+	query := fmt.Sprintf("client_id=%s&redirect_uri=%s",
+		url.QueryEscape(cfg.KeycloakClientID), url.QueryEscape(redirect))
+	if idToken != "" {
+		query += "&id_token_hint=" + url.QueryEscape(idToken)
+	}
+	return fmt.Sprintf("%s/protocol/openid-connect/logout?%s", base, query)
 }
 
 func decodeJWTClaims(raw string) string {
