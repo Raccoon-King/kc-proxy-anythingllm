@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__kapture__list_tabs",
+      "mcp__kapture__screenshot",
+      "Bash(docker logs:*)",
+      "mcp__kapture__fill",
+      "mcp__kapture__click",
+      "mcp__kapture__show",
+      "Bash(docker ps:*)",
+      "Bash(docker compose build:*)",
+      "Bash(docker compose:*)",
+      "mcp__kapture__navigate",
+      "mcp__kapture__reload",
+      "mcp__kapture__new_tab",
+      "Bash(docker exec:*)",
+      "Bash(docker network:*)",
+      "Bash(docker inspect:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

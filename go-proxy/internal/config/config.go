@@ -15,6 +15,7 @@ type Config struct {
 	AnythingLLMBaseURL   string
 	AnythingLLMAPIKey    string
 	KeycloakIssuerURL    string
+	KeycloakExternalURL  string // External URL for browser redirects (defaults to KeycloakIssuerURL)
 	KeycloakClientID     string
 	KeycloakClientSecret string
 	KeycloakRedirectURL  string
@@ -33,6 +34,8 @@ type Config struct {
 	AgreementButtonText  string
 	KeycloakCAPath       string
 	KeycloakInsecureSkip bool
+	DebugLogging         bool
+	SecurityLogging      bool
 }
 
 func getenv(key, def string) string {
@@ -53,11 +56,13 @@ func mustEnv(key string) string {
 // Load reads environment variables into Config with defaults where possible.
 func Load() Config {
 	sessionSecret := mustEnv("SESSION_SECRET")
+	issuerURL := mustEnv("KEYCLOAK_ISSUER_URL")
 	cfg := Config{
 		Port:                 getenv("PORT", "8080"),
 		AnythingLLMBaseURL:   getenv("ANYLLM_URL", "http://anythingllm:3001"),
 		AnythingLLMAPIKey:    mustEnv("ANYLLM_API_KEY"),
-		KeycloakIssuerURL:    mustEnv("KEYCLOAK_ISSUER_URL"),
+		KeycloakIssuerURL:    issuerURL,
+		KeycloakExternalURL:  getenv("KEYCLOAK_EXTERNAL_URL", issuerURL), // defaults to internal URL
 		KeycloakClientID:     mustEnv("KEYCLOAK_CLIENT_ID"),
 		KeycloakClientSecret: mustEnv("KEYCLOAK_CLIENT_SECRET"),
 		KeycloakRedirectURL:  getenv("KEYCLOAK_REDIRECT_URL", "http://localhost:8080/auth/callback"),
@@ -76,6 +81,8 @@ func Load() Config {
 		AgreementButtonText:  getenv("AGREEMENT_BUTTON_TEXT", "OK"),
 		KeycloakCAPath:       getenv("KEYCLOAK_CA_PATH", ""),
 		KeycloakInsecureSkip: getenv("KEYCLOAK_INSECURE_SKIP_VERIFY", "false") == "true",
+		DebugLogging:         getenv("DEBUG_LOGGING", "false") == "true",
+		SecurityLogging:      getenv("SECURITY_LOGGING", "true") != "false",
 	}
 
 	return cfg

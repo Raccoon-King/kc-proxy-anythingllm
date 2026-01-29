@@ -29,7 +29,7 @@ func (f *fakeOIDC) AuthCodeURL(state string, _ ...oauth2.AuthCodeOption) string 
 	return f.codeURL + "?state=" + state
 }
 
-func (f *fakeOIDC) Exchange(_ context.Context, _ string) (*oauth2.Token, error) {
+func (f *fakeOIDC) Exchange(_ context.Context, _ string, _ ...oauth2.AuthCodeOption) (*oauth2.Token, error) {
 	return f.token, f.tokenErr
 }
 

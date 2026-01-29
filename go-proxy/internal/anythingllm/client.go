@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -22,9 +24,11 @@ type Client struct {
 
 // User represents a minimal AnythingLLM user.
 type User struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID       json.Number `json:"id"`
+	Email    string      `json:"email"`
+	Username string      `json:"username"`
+	Name     string      `json:"name"`
+	Role     string      `json:"role"`
 }
 
 // AuthTokenResponse wraps the simple SSO token response.
@@ -57,13 +61,15 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (*http.R
 	}
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
+	if os.Getenv("DEBUG_HTTP") == "true" {
+		log.Printf("[DBG] http %s %s auth=%s", method, path, req.Header.Get("Authorization"))
+	}
 
 	return c.http.Do(req)
 }
 
 func decodeJSON[T any](r io.Reader, dst *T) error {
 	dec := json.NewDecoder(r)
-	dec.DisallowUnknownFields()
 	return dec.Decode(dst)
 }
 
@@ -100,7 +106,10 @@ func (c *Client) EnsureUser(ctx context.Context, email, name, role string, allow
 		if err := decodeJSON(resp.Body, &u); err != nil {
 			return "", err
 		}
-		return u.ID, nil
+		if strings.TrimSpace(u.ID.String()) == "" {
+			return "", errors.New("create user failed: empty id in response")
+		}
+		return u.ID.String(), nil
 	}
 
 	if resp.StatusCode == http.StatusConflict {
@@ -118,6 +127,11 @@ func (c *Client) findUserID(ctx context.Context, email string) (string, error) {
 	queries := []string{
 		"/api/v1/users?email=%s",
 		"/api/v1/users?search=%s",
+	}
+	target := strings.ToLower(email)
+	targetLocal := target
+	if at := strings.Index(target, "@"); at != -1 {
+		targetLocal = target[:at]
 	}
 
 	for _, pattern := range queries {
@@ -141,7 +155,10 @@ func (c *Client) findUserID(ctx context.Context, email string) (string, error) {
 		candidates := append(payload.Users, payload.Data...)
 		for _, u := range candidates {
 			if strings.EqualFold(u.Email, email) {
-				return u.ID, nil
+				return u.ID.String(), nil
+			}
+			if strings.EqualFold(u.Username, email) || strings.EqualFold(strings.ToLower(u.Username), targetLocal) {
+				return u.ID.String(), nil
 			}
 		}
 	}

@@ -41,7 +41,7 @@ func run(ctx context.Context, cfg config.Config) error {
 	deps := server.Dependencies{
 		Cfg:      cfg,
 		Sessions: auth.NewSessionManager(cfg.SessionSecret, cfg.SessionSecure),
-		OIDC:     auth.NewOIDCAdapter(oidcProvider),
+		OIDC:     auth.NewOIDCAdapterWithExternalURL(oidcProvider, cfg.KeycloakIssuerURL, cfg.KeycloakExternalURL),
 		LLM:      anythingllm.New(cfg.AnythingLLMBaseURL, cfg.AnythingLLMAPIKey),
 	}
 

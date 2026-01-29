@@ -19,13 +19,16 @@
     environment:
       - PORT=8080
       - ANYLLM_URL=http://anythingllm:3001
-      - ANYLLM_API_KEY=${ANYLLM_API_KEY:-change-me}
+      - ANYLLM_API_KEY=${ANYLLM_API_KEY:-XN6FD4N-26N4BXR-JXS1DT9-F2D8MHT}
       - ANYLLM_AUTO_CREATE=true
       - ANYLLM_DEFAULT_ROLE=user
-      - KEYCLOAK_ISSUER_URL=${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/master}
-      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-anythingllm-proxy}
-      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-change-me}
+      # Internal URL for proxy->Keycloak communication (via shared Docker network)
+      - KEYCLOAK_ISSUER_URL=${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/mapache}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-mapache-client}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-7HMLGYoxhKIjmOQZkK9Bp1z3oamucLIc}
       - KEYCLOAK_REDIRECT_URL=${KEYCLOAK_REDIRECT_URL:-http://localhost:8080/auth/callback}
+      # External URL for browser redirects (what users see)
+      - KEYCLOAK_EXTERNAL_URL=${KEYCLOAK_EXTERNAL_URL:-http://localhost:8180/realms/mapache}
       - SESSION_SECRET=${SESSION_SECRET:-generate-a-random-string}
       - SESSION_SECURE=false
       - BANNER_TOP_TEXT=${BANNER_TOP_TEXT:-SITE UNDER TEST}
@@ -35,6 +38,12 @@
       - AGREEMENT_TITLE=${AGREEMENT_TITLE:-User Agreement}
       - AGREEMENT_BODY=${AGREEMENT_BODY:-Please acknowledge and accept this agreement to continue.}
       - AGREEMENT_BUTTON_TEXT=${AGREEMENT_BUTTON_TEXT:-OK}
+      - DEBUG_LOGGING=${DEBUG_LOGGING:-true}
+      - SECURITY_LOGGING=${SECURITY_LOGGING:-true}
+      - DEBUG_HTTP=${DEBUG_HTTP:-true}
+    networks:
+      - default
+      - kecloak_default
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -42,3 +51,5 @@
 networks:
   default:
     name: anythingllm_net
+  kecloak_default:
+    external: true

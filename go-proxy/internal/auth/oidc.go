@@ -17,16 +17,28 @@ type OIDC struct {
 }
 
 // NewOIDC initializes OIDC helpers.
+// The issuer parameter is the URL used to fetch OIDC discovery (can be internal URL).
+// InsecureIssuerURLContext allows the discovered issuer to differ from the request URL,
+// which is needed when the proxy accesses Keycloak via internal hostname but Keycloak
+// advertises an external hostname in its configuration.
 func NewOIDC(ctx context.Context, issuer, clientID, clientSecret, redirectURL string, httpClient *http.Client) (*OIDC, error) {
 	if httpClient != nil {
 		ctx = oidc.ClientContext(ctx, httpClient)
 	}
+	// Allow issuer mismatch between request URL and discovery response
+	// This is needed for internal/external URL split (e.g., keycloak:8080 vs localhost:8180)
+	ctx = oidc.InsecureIssuerURLContext(ctx, issuer)
 	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
 		return nil, err
 	}
 
-	oidcConfig := &oidc.Config{ClientID: clientID}
+	oidcConfig := &oidc.Config{
+		ClientID: clientID,
+		// Skip issuer check to allow internal/external URL split
+		// (proxy accesses Keycloak at internal URL, but tokens have external issuer)
+		SkipIssuerCheck: true,
+	}
 	verifier := provider.Verifier(oidcConfig)
 
 	oauthConfig := &oauth2.Config{
