@@ -10,6 +10,7 @@ proxy/.env
 go-proxy/anythingllm-proxy
 go-proxy/bin/
 go-proxy/.env
+go-proxy/proxy
 
 # Environment files
 *.env
@@ -18,8 +19,29 @@ go-proxy/.env
 data/*
 !data/.gitignore
 
+# Local auth artifacts
+.rancher-kubeconfig
+cookies.txt
+
+# Local tool configs
+.claude/
+.docker/
+.helm/
+.gemini/
+
+# TLS private keys and cert bundles
+certs/*.key
+certs/*.pem
+certs/*.p12
+certs/*.pfx
+certs/*.csr
+
 # Docker overrides
 docker-compose.override.yml
+
+# Local build artifacts
+dist/*.tgz
+helm/weaviate/charts/*.tgz
 
 # Trivy caches
 .trivy/

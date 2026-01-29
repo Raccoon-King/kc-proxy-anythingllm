@@ -19,17 +19,17 @@
     environment:
       - PORT=8080
       - ANYLLM_URL=http://anythingllm:3001
-      - ANYLLM_API_KEY=${ANYLLM_API_KEY:-XN6FD4N-26N4BXR-JXS1DT9-F2D8MHT}
+      - ANYLLM_API_KEY=${ANYLLM_API_KEY:-CHANGE_ME}
       - ANYLLM_AUTO_CREATE=false
       - ANYLLM_DEFAULT_ROLE=user
       # Internal URL for proxy->Keycloak communication (via shared Docker network)
       - KEYCLOAK_ISSUER_URL=${KEYCLOAK_ISSUER_URL:-http://keycloak:8080/realms/mapache}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-mapache-client}
-      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-7HMLGYoxhKIjmOQZkK9Bp1z3oamucLIc}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET:-CHANGE_ME}
       - KEYCLOAK_REDIRECT_URL=${KEYCLOAK_REDIRECT_URL:-http://localhost:8080/auth/callback}
       # External URL for browser redirects (what users see)
       - KEYCLOAK_EXTERNAL_URL=${KEYCLOAK_EXTERNAL_URL:-http://localhost:8180/realms/mapache}
-      - SESSION_SECRET=${SESSION_SECRET:-hzo9edRqjnSGhBpKnjxkGZv62eNmfOJknhB0v95Otdc=}
+      - SESSION_SECRET=${SESSION_SECRET:-CHANGE_ME}
       - SESSION_SECURE=false
       - BANNER_TOP_TEXT=${BANNER_TOP_TEXT:-SITE UNDER TEST}
       - BANNER_BOTTOM_TEXT=${BANNER_BOTTOM_TEXT:-SITE UNDER TEST}
