@@ -1,6 +1,6 @@
 nameOverride: ""
 fullnameOverride: ""
-namespace: posaidon
+namespace: ""
 
 image:
   registry: harbor.localhost
@@ -16,18 +16,63 @@ service:
   type: ClusterIP
   port: 3001
 
-resources: {}
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+
+serviceAccount:
+  create: false
+  name: ""
+  automount: false
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+extraVolumes: []
+extraVolumeMounts: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: null
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: null
+
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+  policyTypes: []
 
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
   fsGroup: 1000
+  fsGroupChangePolicy: "OnRootMismatch"
+  seccompProfile:
+    type: RuntimeDefault
 
 containerSecurityContext:
   readOnlyRootFilesystem: false
   allowPrivilegeEscalation: false
   capabilities:
     drop: ["ALL"]
+
+configMap:
+  create: true
+  name: ""
 
 persistence:
   enabled: true
@@ -40,8 +85,17 @@ storageDir: /app/server/storage
 
 env:
   STORAGE_DIR: /app/server/storage
+  SIMPLE_SSO_ENABLED: "true"
+  SIMPLE_SSO_NO_LOGIN: "true"
+  SIMPLE_SSO_NO_LOGIN_REDIRECT: "http://proxy.localhost/login"
+  VECTOR_DB: "weaviate"
+  WEAVIATE_ENDPOINT: "http://weaviate:80"
+  JWT_SECRET: "88b55eacfb325fd1b8417bf544f3c2c99ab2e2675d0c3348f716f27907afaf9a"
 
 extraEnv: []
+
+secretEnv:
+  WEAVIATE_API_KEY: ""
 
 existingSecret: ""
 

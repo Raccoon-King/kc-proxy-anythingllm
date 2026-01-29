@@ -54,10 +54,14 @@ func NewOIDC(ctx context.Context, issuer, clientID, clientSecret, redirectURL st
 
 // TokenClaims represents the subset of ID token claims we care about.
 type TokenClaims struct {
-	Email             string `json:"email"`
-	Name              string `json:"name"`
-	PreferredUsername string `json:"preferred_username"`
-	Subject           string `json:"sub"`
+	Email             string   `json:"email"`
+	EmailVerified     bool     `json:"email_verified"`
+	Name              string   `json:"name"`
+	GivenName         string   `json:"given_name"`
+	FamilyName        string   `json:"family_name"`
+	PreferredUsername string   `json:"preferred_username"`
+	Subject           string   `json:"sub"`
+	Groups            []string `json:"groups"`
 }
 
 // VerifyIDToken parses and verifies an ID token string.

@@ -10,3 +10,13 @@
 {{- printf "%s" $name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "proxy.hasSecretEnv" -}}
+{{- $flags := dict "value" false -}}
+{{- range $k, $v := .Values.secretEnv -}}
+{{- if $v -}}
+{{- $_ := set $flags "value" true -}}
+{{- end -}}
+{{- end -}}
+{{- $flags.value -}}
+{{- end -}}

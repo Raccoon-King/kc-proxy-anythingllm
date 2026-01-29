@@ -1,0 +1,50 @@
+weaviate:
+  replicas: 1
+
+  image:
+    tag: "1.34.0"
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  grpcService:
+    enabled: false
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    fsGroupChangePolicy: "OnRootMismatch"
+    seccompProfile:
+      type: RuntimeDefault
+
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+  # Set this if the node hostname may change (single-node stability).
+  # env:
+  #   - CLUSTER_HOSTNAME: "node-1"
+  #
+  # auth:
+  #   enabled: false
+  #   apiKey: ""
+  initContainers:
+    sysctlInitContainer:
+      enabled: false
