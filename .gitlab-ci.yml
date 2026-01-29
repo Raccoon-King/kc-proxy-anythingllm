@@ -82,6 +82,7 @@ node_lint:
 helm_validate:
   stage: test
   image: alpine/helm:3.14.4
+  entrypoint: [""]
   rules:
     - exists:
         - helm/anythingllm/Chart.yaml
@@ -128,6 +129,7 @@ trivy_scan:
 helm_publish:
   stage: build
   image: alpine/helm:3.14.4
+  entrypoint: [""]
   rules:
     - exists:
         - helm/anythingllm/Chart.yaml
