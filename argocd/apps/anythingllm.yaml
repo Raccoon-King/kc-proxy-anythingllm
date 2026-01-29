@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: anythingllm
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: oci://192.168.80.1:8443/mapache
+    chart: anythingllm
+    targetRevision: 1.0.0
+    helm:
+      parameters:
+        - name: namespace
+          value: posaidon
+        - name: image.registry
+          value: 192.168.80.1:8443
+        - name: image.tag
+          value: latest
+        - name: imagePullSecrets[0]
+          value: harbor-pull-secret
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: posaidon
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

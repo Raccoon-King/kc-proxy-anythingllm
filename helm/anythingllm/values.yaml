@@ -1,0 +1,64 @@
+nameOverride: ""
+fullnameOverride: ""
+namespace: posaidon
+
+image:
+  registry: harbor.localhost
+  repository: mapache/anythingllm
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 3001
+
+resources: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes: ["ReadWriteOnce"]
+  size: 10Gi
+  mountPath: /app/server/storage
+
+storageDir: /app/server/storage
+
+env:
+  STORAGE_DIR: /app/server/storage
+
+extraEnv: []
+
+existingSecret: ""
+
+livenessProbe:
+  enabled: true
+  tcpSocket:
+    port: 3001
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 5
+
+readinessProbe:
+  enabled: true
+  tcpSocket:
+    port: 3001
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 5

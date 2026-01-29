@@ -6,11 +6,34 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"anythingllm-proxy/internal/auth"
 	"anythingllm-proxy/internal/config"
 	"golang.org/x/oauth2"
 )
+
+func baseTestConfig() config.Config {
+	return config.Config{
+		Port:                 "8080",
+		AnythingLLMBaseURL:   "http://anythingllm:3001",
+		AnythingLLMAPIKey:    "key",
+		KeycloakIssuerURL:    "https://issuer",
+		KeycloakClientID:     "client",
+		KeycloakClientSecret: "secret",
+		SessionSecret:        []byte("abc"),
+		CallbackPath:         "/auth/callback",
+		SessionSameSite:      "lax",
+		SessionMaxAgeDays:    7,
+		SessionHTTPOnly:      true,
+		ReadTimeout:          5 * time.Second,
+		WriteTimeout:         5 * time.Second,
+		ReadHeaderTimeout:    2 * time.Second,
+		IdleTimeout:          10 * time.Second,
+		ShutdownTimeout:      2 * time.Second,
+		MaxHeaderBytes:       1 << 20,
+	}
+}
 
 func TestMainExitsWhenSkipListen(t *testing.T) {
 	os.Setenv("SESSION_SECRET", "abc")
@@ -26,16 +49,7 @@ func TestMainExitsWhenSkipListen(t *testing.T) {
 }
 
 func TestMainRunsWithStubServe(t *testing.T) {
-	cfg := config.Config{
-		Port:                 "8080",
-		AnythingLLMBaseURL:   "http://anythingllm:3001",
-		AnythingLLMAPIKey:    "key",
-		KeycloakIssuerURL:    "https://issuer",
-		KeycloakClientID:     "client",
-		KeycloakClientSecret: "secret",
-		SessionSecret:        []byte("abc"),
-		CallbackPath:         "/auth/callback",
-	}
+	cfg := baseTestConfig()
 
 	origNewOIDC := newOIDC
 	origServe := serve
@@ -57,16 +71,7 @@ func TestMainRunsWithStubServe(t *testing.T) {
 }
 
 func TestRunReturnsErrorOnOIDCInit(t *testing.T) {
-	cfg := config.Config{
-		Port:                 "8080",
-		AnythingLLMBaseURL:   "http://anythingllm:3001",
-		AnythingLLMAPIKey:    "key",
-		KeycloakIssuerURL:    "https://issuer",
-		KeycloakClientID:     "client",
-		KeycloakClientSecret: "secret",
-		SessionSecret:        []byte("abc"),
-		CallbackPath:         "/auth/callback",
-	}
+	cfg := baseTestConfig()
 	orig := newOIDC
 	defer func() { newOIDC = orig }()
 	newOIDC = func(ctx context.Context, issuer, clientID, secret, redirect string, _ *http.Client) (*auth.OIDC, error) {
@@ -78,16 +83,7 @@ func TestRunReturnsErrorOnOIDCInit(t *testing.T) {
 }
 
 func TestRunServeError(t *testing.T) {
-	cfg := config.Config{
-		Port:                 "8080",
-		AnythingLLMBaseURL:   "http://anythingllm:3001",
-		AnythingLLMAPIKey:    "key",
-		KeycloakIssuerURL:    "https://issuer",
-		KeycloakClientID:     "client",
-		KeycloakClientSecret: "secret",
-		SessionSecret:        []byte("abc"),
-		CallbackPath:         "/auth/callback",
-	}
+	cfg := baseTestConfig()
 	origNewOIDC := newOIDC
 	origServe := serve
 	defer func() {
@@ -104,16 +100,7 @@ func TestRunServeError(t *testing.T) {
 	}
 }
 func TestRunReturnsServeError(t *testing.T) {
-	cfg := config.Config{
-		Port:                 "8080",
-		AnythingLLMBaseURL:   "http://anythingllm:3001",
-		AnythingLLMAPIKey:    "key",
-		KeycloakIssuerURL:    "https://issuer",
-		KeycloakClientID:     "client",
-		KeycloakClientSecret: "secret",
-		SessionSecret:        []byte("abc"),
-		CallbackPath:         "/auth/callback",
-	}
+	cfg := baseTestConfig()
 	origNewOIDC := newOIDC
 	origServe := serve
 	defer func() {

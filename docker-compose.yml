@@ -41,12 +41,55 @@
       - DEBUG_LOGGING=${DEBUG_LOGGING:-true}
       - SECURITY_LOGGING=${SECURITY_LOGGING:-true}
       - DEBUG_HTTP=${DEBUG_HTTP:-true}
+      - ACCESS_LOGGING=${ACCESS_LOGGING:-true}
+      - METRICS_ENABLED=${METRICS_ENABLED:-false}
+      - READINESS_CHECKS=${READINESS_CHECKS:-false}
+      - READINESS_URL=${READINESS_URL:-}
+      - READINESS_TIMEOUT=${READINESS_TIMEOUT:-2s}
+      - SESSION_SAMESITE=${SESSION_SAMESITE:-lax}
+      - SESSION_MAX_AGE_DAYS=${SESSION_MAX_AGE_DAYS:-7}
+      - SESSION_HTTP_ONLY=${SESSION_HTTP_ONLY:-true}
+      - READ_TIMEOUT=${READ_TIMEOUT:-15s}
+      - WRITE_TIMEOUT=${WRITE_TIMEOUT:-15s}
+      - READ_HEADER_TIMEOUT=${READ_HEADER_TIMEOUT:-5s}
+      - IDLE_TIMEOUT=${IDLE_TIMEOUT:-60s}
+      - SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT:-10s}
+      - MAX_HEADER_BYTES=${MAX_HEADER_BYTES:-1048576}
+      - UPSTREAM_DIAL_TIMEOUT=${UPSTREAM_DIAL_TIMEOUT:-10s}
+      - UPSTREAM_TLS_HANDSHAKE_TIMEOUT=${UPSTREAM_TLS_HANDSHAKE_TIMEOUT:-10s}
+      - UPSTREAM_RESPONSE_HEADER_TIMEOUT=${UPSTREAM_RESPONSE_HEADER_TIMEOUT:-15s}
+      - UPSTREAM_IDLE_TIMEOUT=${UPSTREAM_IDLE_TIMEOUT:-60s}
+      - UPSTREAM_MAX_IDLE_CONNS=${UPSTREAM_MAX_IDLE_CONNS:-100}
+      - UPSTREAM_MAX_IDLE_CONNS_PER_HOST=${UPSTREAM_MAX_IDLE_CONNS_PER_HOST:-10}
+      - ANYLLM_HTTP_TIMEOUT=${ANYLLM_HTTP_TIMEOUT:-10s}
+      - ANYLLM_RETRY_MAX=${ANYLLM_RETRY_MAX:-0}
+      - ANYLLM_RETRY_BACKOFF=${ANYLLM_RETRY_BACKOFF:-200ms}
+      - SECURITY_HEADERS=${SECURITY_HEADERS:-true}
+      - HEADER_FRAME_OPTIONS=${HEADER_FRAME_OPTIONS:-SAMEORIGIN}
+      - HEADER_REFERRER_POLICY=${HEADER_REFERRER_POLICY:-strict-origin-when-cross-origin}
+      - HEADER_CSP=${HEADER_CSP:-}
+      - HEADER_PERMISSIONS=${HEADER_PERMISSIONS:-geolocation=(), microphone=(), camera=()}
+      - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-0}
+      - RATE_LIMIT_BURST=${RATE_LIMIT_BURST:-0}
     networks:
       - default
       - kecloak_default
     ports:
       - "8080:8080"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
 
 networks:
   default:

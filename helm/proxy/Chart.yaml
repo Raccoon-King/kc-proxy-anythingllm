@@ -1,0 +1,6 @@
+apiVersion: v2
+name: anythingllm-proxy
+description: Keycloak proxy for AnythingLLM
+type: application
+version: 1.0.1
+appVersion: "latest"

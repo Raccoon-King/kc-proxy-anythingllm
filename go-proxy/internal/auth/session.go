@@ -9,20 +9,32 @@ import (
 
 const sessionName = "anythingllm_proxy"
 
+// SessionOptions configures session cookie behavior.
+type SessionOptions struct {
+	Secure   bool
+	SameSite http.SameSite
+	MaxAge   time.Duration
+	HttpOnly bool
+}
+
 // SessionManager wraps gorilla sessions cookie store.
 type SessionManager struct {
 	store *sessions.CookieStore
 }
 
 // NewSessionManager builds a manager with secure defaults.
-func NewSessionManager(secret []byte, secure bool) *SessionManager {
+func NewSessionManager(secret []byte, opts SessionOptions) *SessionManager {
 	store := sessions.NewCookieStore(secret)
+	maxAge := int(opts.MaxAge.Seconds())
+	if maxAge <= 0 {
+		maxAge = int((24 * time.Hour).Seconds()) * 7
+	}
 	store.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   int((24 * time.Hour).Seconds()) * 7, // one week
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+		HttpOnly: opts.HttpOnly,
+		Secure:   opts.Secure,
+		SameSite: opts.SameSite,
 	}
 	return &SessionManager{store: store}
 }
