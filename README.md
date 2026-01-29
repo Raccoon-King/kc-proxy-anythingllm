@@ -1,61 +1,84 @@
 ﻿# Keycloak Proxy for AnythingLLM
 
-A Go-based reverse proxy that fronts AnythingLLM with Keycloak OIDC authentication, manages sessions, and hands off to AnythingLLM using its Simple SSO token flow.
+A Go reverse proxy that:
+- Authenticates users with Keycloak (OIDC Authorization Code + PKCE).
+- Mirrors/logs out stale sessions, including KC logout on state mismatch.
+- Issues AnythingLLM Simple SSO tokens via the admin API and redirects to the returned `loginPath`.
+- Injects mandatory banners and (optionally) a user-agreement gate.
+
+## Architecture
+```
+Browser → Proxy (Go) → AnythingLLM (API & UI)
+                ↘→ Keycloak (OIDC)
+```
+- Sessions are stored in a signed HTTP-only cookie `anythingllm_proxy`.
+- On login: proxy exchanges the KC code, ensures the user exists (or creates), fetches `/api/v1/users/{id}/issue-auth-token`, and redirects to `/sso/simple?token=...`.
+- If AnythingLLM returns 401/403 or a login redirect, the proxy clears its cookie and restarts login. State mismatches also trigger KC logout.
 
 ## Prerequisites
-- Docker and Docker Compose
-- Ports `3001` (AnythingLLM) and `8080` (proxy) free
-- An AnythingLLM admin API key (for issuing user tokens)
-- A Keycloak realm/client configured for standard Authorization Code flow
+- Docker & Docker Compose
+- Ports free: `3001` (AnythingLLM), `8080` (proxy)
+- AnythingLLM admin API key
+- Keycloak realm/client configured for Auth Code + client secret (PKCE allowed)
 
 ## Quick start
-1) Export secrets (examples):
 ```powershell
-$env:ANYLLM_API_KEY="your-admin-api-key"
-$env:KEYCLOAK_ISSUER_URL="https://keycloak.example.com/realms/yourrealm"
-$env:KEYCLOAK_CLIENT_ID="anythingllm-proxy"
-$env:KEYCLOAK_CLIENT_SECRET="client-secret"
-$env:SESSION_SECRET="long-random-string"
-```
-2) Bring up the stack:
-```powershell
+$env:ANYLLM_API_KEY="XN6FD4N-26N4BXR-JXS1DT9-F2D8MHT"   # example
+$env:KEYCLOAK_ISSUER_URL="http://localhost:8180/realms/mapache"
+$env:KEYCLOAK_CLIENT_ID="mapache-client"
+$env:KEYCLOAK_CLIENT_SECRET="7HMLGYoxhKIjmOQZkK9Bp1z3oamucLIc"
+$env:SESSION_SECRET="generate-a-random-string"
 docker compose up -d --build
 ```
-3) Visit http://localhost:8080. You will be redirected to Keycloak, then returned through the proxy which issues a Simple SSO token to AnythingLLM.
+Browse to http://localhost:8080 and log in.
 
-## Files
-- `docker-compose.yml` — runs AnythingLLM and the Go proxy.
-- `data/.env` — mounted into the AnythingLLM container (add provider keys, etc.).
-- `go-proxy/` — Go reverse proxy with Keycloak login + Simple SSO handoff.
+## Configuration (proxy)
+- Core: `PORT` (8080), `ANYLLM_URL` (http://anythingllm:3001), `ANYLLM_API_KEY` (required), `ANYLLM_AUTO_CREATE` (default true), `ANYLLM_DEFAULT_ROLE` (user)
+- Keycloak: `KEYCLOAK_ISSUER_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_REDIRECT_URL` (default http://localhost:8080/auth/callback), `KEYCLOAK_CA_PATH`, `KEYCLOAK_INSECURE_SKIP_VERIFY`
+- Sessions/UI: `SESSION_SECRET` (required), `SESSION_SECURE` (false for http dev)
+- Banners: `BANNER_TOP_TEXT`, `BANNER_BOTTOM_TEXT`, `BANNER_BG_COLOR`, `BANNER_TEXT_COLOR`
+- Agreement (can be disabled): `AGREEMENT_TITLE`, `AGREEMENT_BODY`, `AGREEMENT_BUTTON_TEXT`, `DISABLE_AGREEMENT` (default false)
+- Logging: `DEBUG_LOGGING` (false), `SECURITY_LOGGING` (true), `DEBUG_HTTP` (true to log upstream calls)
 
-## AnythingLLM SSO note
-Enable Simple SSO inside AnythingLLM by setting `SIMPLE_SSO_ENABLED=true` (see https://docs.anythingllm.com/configuration#simple-sso-passthrough). The proxy requests `/api/v1/users/{id}/issue-auth-token` and redirects to the returned `loginPath` so the browser receives the AnythingLLM session cookie.
+## AnythingLLM settings
+In `data/.env` (mounted to `/app/server/.env`):
+```
+SIMPLE_SSO_ENABLED=true
+SIMPLE_SSO_NO_LOGIN=true   # optional if you only use SSO
+```
 
-## Environment (proxy)
-- `PORT` (default `8080`)
-- `ANYLLM_URL` (default `http://anythingllm:3001`)
-- `ANYLLM_API_KEY` (required)
-- `ANYLLM_AUTO_CREATE` (default `true`) — create users in AnythingLLM when missing.
-- `ANYLLM_DEFAULT_ROLE` (default `user`)
-- `KEYCLOAK_ISSUER_URL` (defaults to `http://keycloak:8080/realms/master` so it can talk to a Keycloak container on the same Docker network), `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`
-- `KEYCLOAK_REDIRECT_URL` (default `http://localhost:8080/auth/callback`)
-- `SESSION_SECRET` (required), `SESSION_SECURE` (`true` to force secure cookies)
-- `BANNER_TOP_TEXT`, `BANNER_BOTTOM_TEXT` (default `SITE UNDER TEST`)
-- `BANNER_BG_COLOR` (default `#f6f000`), `BANNER_TEXT_COLOR` (default `#000000`)
-- `AGREEMENT_TITLE`, `AGREEMENT_BODY`, `AGREEMENT_BUTTON_TEXT` (configurable user agreement content)
-- `KEYCLOAK_CA_PATH` (optional PEM bundle if Keycloak uses custom TLS), `KEYCLOAK_INSECURE_SKIP_VERIFY` (`true` to skip TLS verify for self-signed/dev)
+## Flows & edge handling
+- Missing/invalid SSO token on `/sso/*` → redirect to `/login` to restart.
+- State mismatch in callback → clear proxy session + redirect to Keycloak RP logout, then restart.
+- AnythingLLM 401/403 or login redirect → proxy clears its cookie and restarts login.
+- Logged-in KC but logged-out AnythingLLM → caught by the above restart logic.
 
-## Login flow
-1. User hits proxy → if no session, redirected to Keycloak.
-2. Callback exchanges code, verifies ID token, ensures user exists in AnythingLLM (best-effort via API), and calls `issue-auth-token`.
-3. User must accept the agreement (proxy enforced).
-4. Browser is redirected through the proxy to AnythingLLM `loginPath`, establishing the upstream session.
+## Banners & agreement
+- Banners are injected into every HTML response from AnythingLLM.
+- Agreement gate is enabled by default; set `DISABLE_AGREEMENT=true` to skip (keeps tests passing with flag).
+
+## Make a user login URL manually (admin)
+```
+curl -H "Authorization: Bearer $ANYLLM_API_KEY" \
+  http://localhost:3001/api/v1/users/1/issue-auth-token
+# → {"token":"...","loginPath":"/sso/simple?token=..."}
+```
+Redirect the browser to `http://localhost:3001/loginPath` (add `&redirectTo=/path` if desired).
 
 ## Development
-- Build/test proxy locally:
-  ```powershell
-  cd go-proxy
-  go test ./...
-  go run ./cmd/server
-  ```
-- Proxy binary is built via multi-stage `go-proxy/Dockerfile` in Compose.
+```powershell
+cd go-proxy
+go test ./...
+go run ./cmd/server   # uses env vars
+```
+Docker builds via `go-proxy/Dockerfile`; `docker compose up -d --build` to rebuild the proxy container.
+
+## Troubleshooting
+- `ERR_TOO_MANY_REDIRECTS`: clear `anythingllm_proxy` cookie or hit `/logout`; stale state/codes will be bounced now.
+- `failed to sync user`: check proxy logs for `[SEC] ensure user failed ...`; confirm ANYLLM_API_KEY is valid and Simple SSO is enabled.
+- Keycloak code errors: ensure KC client has PKCE allowed, correct `KEYCLOAK_REDIRECT_URL`, and fresh authorization code (no reuse).
+
+## Files
+- `docker-compose.yml` — runs AnythingLLM + proxy.
+- `data/.env` — AnythingLLM server config.
+- `go-proxy/` — Go proxy sources and tests.

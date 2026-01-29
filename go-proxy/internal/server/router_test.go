@@ -77,6 +77,7 @@ func newTestDeps() Dependencies {
 			userID:    "123",
 			tokenResp: &anythingllm.AuthTokenResponse{Token: "tkn", LoginPath: "/login/path?token=tkn"},
 		},
+		DisableAgreement: true,
 	}
 }
 
@@ -150,8 +151,11 @@ func TestCallbackStateMismatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?state=bad", nil)
 	router.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected redirect on state mismatch, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Header().Get("Location"), "/protocol/openid-connect/logout") {
+		t.Fatalf("expected logout redirect, got %s", rr.Header().Get("Location"))
 	}
 }
 

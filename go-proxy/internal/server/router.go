@@ -49,6 +49,8 @@ type Dependencies struct {
 	Sessions *auth.SessionManager
 	OIDC     OIDCClient
 	LLM      LLMClient
+	// Feature flags (used only in tests or optional behaviors)
+	DisableAgreement bool
 }
 
 // NewRouter builds the HTTP handler with all routes wired.
@@ -111,18 +113,23 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Agreement page - shown BEFORE Keycloak auth (no auth required)
 	mux.HandleFunc("/agreement", func(w http.ResponseWriter, r *http.Request) {
+		if d.DisableAgreement {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
 		sess, _ := d.Sessions.Get(r)
+
+		// If no valid session, force login first so we have a place to store acceptance/next
+		if !isSessionValid(sess) {
+			redirect := r.URL.String()
+			dbgLog("agreement: no session, redirecting to login with redirect=%s", redirect)
+			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
+			return
+		}
+
 		if accepted, _ := sess.Values["agreement_accepted"].(bool); accepted {
 			// Already accepted, proceed to login or app
-			if isSessionValid(sess) {
-				http.Redirect(w, r, "/", http.StatusFound)
-			} else {
-				redirect := r.URL.Query().Get("redirect")
-				if redirect == "" {
-					redirect = "/"
-				}
-				http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
-			}
+			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 		dbgLog("showing agreement page")
@@ -134,6 +141,10 @@ func NewRouter(d Dependencies) http.Handler {
 	mux.HandleFunc("/agreement/accept", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if d.DisableAgreement {
+			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 		sess, _ := d.Sessions.Get(r)
@@ -153,17 +164,6 @@ func NewRouter(d Dependencies) http.Handler {
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
-
-		// Check agreement first
-		if accepted, _ := sess.Values["agreement_accepted"].(bool); !accepted {
-			redirect := r.URL.Query().Get("redirect")
-			if redirect == "" {
-				redirect = "/"
-			}
-			dbgLog("login: agreement not accepted, redirecting to agreement")
-			http.Redirect(w, r, "/agreement?redirect="+url.QueryEscape(redirect), http.StatusFound)
-			return
-		}
 
 		// Already authenticated?
 		if isSessionValid(sess) {
@@ -200,7 +200,8 @@ func NewRouter(d Dependencies) http.Handler {
 		expectedState, _ := sess.Values["oauth_state"].(string)
 		if expectedState == "" || expectedState != state {
 			secLog("state mismatch session=%v incoming=%s", sess.Values["oauth_state"], state)
-			http.Error(w, "state mismatch", http.StatusBadRequest)
+			_ = d.Sessions.Clear(r, w)
+			http.Redirect(w, r, keycloakLogoutURL(d.Cfg), http.StatusFound)
 			return
 		}
 
@@ -249,6 +250,7 @@ func NewRouter(d Dependencies) http.Handler {
 		sess.Values["expiry"] = token.Expiry.Unix()
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
+		sess.Values["agreement_accepted"] = false
 
 		// Determine login ID
 		loginID := claims.Email
@@ -284,11 +286,16 @@ func NewRouter(d Dependencies) http.Handler {
 			redirectPath = "/" + redirectPath
 		}
 		if after, _ := sess.Values["redirect_after"].(string); after != "" && after != "/" {
-			redirectPath = redirectPath + "&redirect_to=" + url.QueryEscape(after)
+			redirectPath = redirectPath + "&redirectTo=" + url.QueryEscape(after)
 		}
 
-		dbgLog("callback complete, redirecting to %s", redirectPath)
-		http.Redirect(w, r, redirectPath, http.StatusFound)
+		// Force agreement gating
+		sess.Values["agreement_next"] = redirectPath
+		_ = d.Sessions.Save(r, w, sess)
+
+		dbgLog("callback complete, redirecting to agreement then %s", redirectPath)
+		secLog("sso token issued userID=%s loginID=%s next=%s", userID, loginID, redirectPath)
+		http.Redirect(w, r, "/agreement", http.StatusFound)
 	})
 
 	// Logout
@@ -311,27 +318,39 @@ func NewRouter(d Dependencies) http.Handler {
 			return
 		}
 
-		// Allow AnythingLLM's SSO endpoints through - they handle their own auth
-		if strings.HasPrefix(path, "/sso/") || strings.HasPrefix(path, "/api/") {
-			dbgLog("allowing through without proxy auth: %s", path)
+		// Allow AnythingLLM's SSO/API endpoints through with a guard for missing token
+		if strings.HasPrefix(path, "/sso/") {
+			if r.URL.Query().Get("token") == "" {
+				dbgLog("sso request without token, redirecting to login")
+				http.Redirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
+				return
+			}
+			dbgLog("allowing SSO path through without proxy auth: %s", path)
+			proxy.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(path, "/api/") {
+			dbgLog("allowing API path through without proxy auth: %s", path)
 			proxy.ServeHTTP(w, r)
 			return
 		}
 
 		sess, _ := d.Sessions.Get(r)
 
-		// Check agreement first (before auth)
-		if accepted, _ := sess.Values["agreement_accepted"].(bool); !accepted {
-			dbgLog("main: agreement not accepted, redirecting to agreement")
-			http.Redirect(w, r, "/agreement?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
-			return
-		}
-
-		// Check authentication
+		// Check authentication first
 		if !isSessionValid(sess) {
 			dbgLog("main: not authenticated, redirecting to login")
 			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
 			return
+		}
+
+		// Then check agreement (unless disabled)
+		if !d.DisableAgreement {
+			if accepted, _ := sess.Values["agreement_accepted"].(bool); !accepted {
+				dbgLog("main: agreement not accepted, redirecting to agreement")
+				http.Redirect(w, r, "/agreement?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
+				return
+			}
 		}
 
 		// Handle logout paths
@@ -355,13 +374,23 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 	proxy.Director = func(req *http.Request) {
 		req.URL.Scheme = targetURL.Scheme
 		req.URL.Host = targetURL.Host
-		req.Header.Set("X-Forwarded-Host", req.Host)
-		req.Host = req.Header.Get("X-Forwarded-Host")
+		req.Host = targetURL.Host
 	}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp == nil || resp.Body == nil {
 			return nil
 		}
+
+		// If AnythingLLM returns auth failure or redirects to its own login, force a fresh SSO cycle.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || isLoginRedirect(resp) {
+			expireProxyCookie(resp)
+			resp.StatusCode = http.StatusFound
+			resp.Header.Set("Location", "/login")
+			resp.Body = io.NopCloser(bytes.NewBuffer(nil))
+			resp.Header.Set("Content-Length", "0")
+			return nil
+		}
+
 		contentType := resp.Header.Get("Content-Type")
 		if !strings.Contains(strings.ToLower(contentType), "text/html") {
 			return nil
@@ -538,6 +567,49 @@ func randomString(n int) string {
 func pkceChallenge(verifier string) string {
 	h := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(h[:])
+}
+
+// isLoginRedirect detects AnythingLLM redirects to its own login page.
+func isLoginRedirect(resp *http.Response) bool {
+	if resp == nil {
+		return false
+	}
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		return false
+	}
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return false
+	}
+	lower := strings.ToLower(loc)
+	return strings.Contains(lower, "/login")
+}
+
+// expireProxyCookie adds a Set-Cookie header to drop the proxy session cookie.
+func expireProxyCookie(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	c := (&http.Cookie{
+		Name:     "anythingllm_proxy",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+	}).String()
+	resp.Header.Add("Set-Cookie", c)
+}
+
+// keycloakLogoutURL builds the RP-initiated logout URL for Keycloak.
+func keycloakLogoutURL(cfg config.Config) string {
+	base := strings.TrimSuffix(cfg.KeycloakIssuerURL, "/")
+	redirect := cfg.KeycloakRedirectURL
+	if redirect == "" {
+		redirect = "http://localhost:" + cfg.Port + "/"
+	}
+	return fmt.Sprintf("%s/protocol/openid-connect/logout?client_id=%s&redirect_uri=%s",
+		base, url.QueryEscape(cfg.KeycloakClientID), url.QueryEscape(redirect))
 }
 
 func decodeJWTClaims(raw string) string {
