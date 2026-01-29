@@ -6,6 +6,10 @@ A Go reverse proxy that:
 - Issues AnythingLLM Simple SSO tokens via the admin API and redirects to the returned `loginPath`.
 - Injects mandatory banners and (optionally) a user-agreement gate.
 
+## Documentation
+- AnythingLLM product docs: https://docs.anythingllm.com/
+- Keycloak local setup details: `../kecloak/README.md` (realm `mapache`, client `mapache-client`).
+
 ## Architecture
 ```
 Browser → Proxy (Go) → AnythingLLM (API & UI)
@@ -31,6 +35,12 @@ $env:SESSION_SECRET="generate-a-random-string"
 docker compose up -d --build
 ```
 Browse to http://localhost:8080 and log in.
+
+## Local Keycloak setup
+- From `../kecloak`, run `docker compose up -d` to start Keycloak (image `quay.io/keycloak/keycloak:26.5.2`). Admin console: http://localhost:8180 (user `mapache`, pass `zaq12wsxZAQ!@WSX`).
+- Realm: `mapache`; client: `mapache-client` (confidential OIDC). Allowed redirects include `http://localhost/*` and `http://127.0.0.1/*`; adjust in `config/realm-export.json` if needed.
+- Seeded users: `admin`, `user`, `non-user` (password `zaq12wsxZAQ!@WSX`; change for long-running instances). Realm role `app-user` is granted to `admin` and `user`.
+- OIDC endpoints: issuer `http://localhost:8180/realms/mapache`, auth `/protocol/openid-connect/auth`, token `/token`, JWKS `/certs`. Client secret for dev: `7HMLGYoxhKIjmOQZkK9Bp1z3oamucLIc`.
 
 ## Configuration (proxy)
 - Core: `PORT` (8080), `ANYLLM_URL` (http://anythingllm:3001), `ANYLLM_API_KEY` (required), `ANYLLM_AUTO_CREATE` (default true), `ANYLLM_DEFAULT_ROLE` (user)
