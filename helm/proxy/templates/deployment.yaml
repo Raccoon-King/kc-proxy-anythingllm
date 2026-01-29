@@ -17,7 +17,20 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "proxy.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "proxy.fullname" . }}
+      {{- else if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range .Values.imagePullSecrets }}
@@ -26,6 +39,22 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: proxy
           image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -33,19 +62,29 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          {{- if or .Values.configMap.create .Values.configMap.name .Values.existingSecret (include "proxy.hasSecretEnv" .) }}
+          envFrom:
+            {{- if or .Values.configMap.create .Values.configMap.name }}
+            - configMapRef:
+                name: {{ if .Values.configMap.name }}{{ .Values.configMap.name }}{{ else }}{{ include "proxy.fullname" . }}{{ end }}
+            {{- end }}
+            {{- if .Values.existingSecret }}
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+            {{- else if (include "proxy.hasSecretEnv" .) }}
+            - secretRef:
+                name: {{ include "proxy.fullname" . }}
+            {{- end }}
+          {{- else }}
           env:
             {{- range $key, $val := .Values.env }}
             - name: {{ $key }}
               value: "{{ $val }}"
             {{- end }}
-          {{- if .Values.existingSecret }}
-          envFrom:
-            - secretRef:
-                name: {{ .Values.existingSecret }}
-          {{- else if .Values.secretEnv }}
-          envFrom:
-            - secretRef:
-                name: {{ include "proxy.fullname" . }}
+          {{- end }}
+          {{- if .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
           {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
@@ -59,3 +98,7 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.extraVolumes }}
+      volumes:
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+      {{- end }}

@@ -75,6 +75,7 @@ type Config struct {
 	AccessRequestContactLabel string
 	AccessRequestSubjectLabel string
 	AccessRequestSignOutText  string
+	AccessRequestFields       []string // Token fields to display (e.g. username,email,given_name,family_name,name,groups)
 	LoggedOutTitle            string
 	LoggedOutBody             string
 	LoggedOutLinkText         string
@@ -123,6 +124,21 @@ func envDuration(key, def string) time.Duration {
 		dur, _ = time.ParseDuration(def)
 	}
 	return dur
+}
+
+func parseCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 // Load reads environment variables into Config with defaults where possible.
@@ -194,6 +210,7 @@ func Load() Config {
 		AccessRequestContactLabel: getenv("ACCESS_REQUEST_CONTACT_LABEL", "Contact:"),
 		AccessRequestSubjectLabel: getenv("ACCESS_REQUEST_SUBJECT_LABEL", "Use this subject line:"),
 		AccessRequestSignOutText:  getenv("ACCESS_REQUEST_SIGNOUT_TEXT", "Sign out"),
+		AccessRequestFields:       parseCSV(getenv("ACCESS_REQUEST_FIELDS", "username,email,given_name,family_name,name,groups,sub")),
 		LoggedOutTitle:            getenv("LOGGED_OUT_TITLE", "Signed out"),
 		LoggedOutBody:             getenv("LOGGED_OUT_BODY", "You have been signed out."),
 		LoggedOutLinkText:         getenv("LOGGED_OUT_LINK_TEXT", "Sign in again"),

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: weaviate
+description: Weaviate vector database (wrapper chart)
+type: application
+version: 0.1.0
+dependencies:
+  - name: weaviate
+    version: 17.7.0
+    repository: https://weaviate.github.io/weaviate-helm
