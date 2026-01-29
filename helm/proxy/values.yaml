@@ -1,11 +1,12 @@
 nameOverride: ""
 fullnameOverride: ""
 namespace: ""
+namespace: ""
 
 image:
   registry: harbor.localhost
   repository: mapache/keycloak-proxy-go
-  tag: sso-logout-fix
+  tag: latest
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
