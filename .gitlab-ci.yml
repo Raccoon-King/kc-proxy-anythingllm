@@ -1,0 +1,80 @@
+﻿workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - lint
+  - test
+  - build
+
+.go_template: &go_template
+  image: golang:1.21
+  rules:
+    - exists:
+        - go-proxy/go.mod
+
+.node_template: &node_template
+  image: node:18
+  rules:
+    - exists:
+        - proxy/package.json
+
+go_lint:
+  stage: lint
+  <<: *go_template
+  script:
+    - cd go-proxy
+    - go fmt ./...
+    - go vet ./...
+
+go_test:
+  stage: test
+  <<: *go_template
+  script:
+    - cd go-proxy
+    - go test ./... -cover
+
+node_test:
+  stage: test
+  <<: *node_template
+  script:
+    - cd proxy
+    - npm ci
+    - npm test --if-present
+
+docker_build_go:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  privileged: true
+  rules:
+    - exists:
+        - go-proxy/Dockerfile
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/go-proxy:$CI_COMMIT_SHORT_SHA" go-proxy
+    - docker push "$CI_REGISTRY_IMAGE/go-proxy:$CI_COMMIT_SHORT_SHA"
+
+docker_build_node:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - name: docker:24.0.5-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  privileged: true
+  rules:
+    - exists:
+        - proxy/Dockerfile
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE/proxy:$CI_COMMIT_SHORT_SHA" proxy
+    - docker push "$CI_REGISTRY_IMAGE/proxy:$CI_COMMIT_SHORT_SHA"
