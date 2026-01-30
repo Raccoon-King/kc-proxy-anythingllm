@@ -30,6 +30,18 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type ctxKey string
+
+const (
+	ctxKeyRequestID         ctxKey = "request_id"
+	ctxKeyCorrelationID     ctxKey = "correlation_id"
+	redirectGuardCookieName        = "proxy_redirect_guard"
+	forceReauthCookieName          = "proxy_force_reauth"
+	redirectGuardMax               = 6
+)
+
+var redirectGuardWindow = 1 * time.Minute
+
 // OIDCClient is the minimal interface needed for login flows.
 type OIDCClient interface {
 	AuthCodeURL(state string, opts ...oauth2.AuthCodeOption) string
@@ -59,6 +71,7 @@ type Dependencies struct {
 func NewRouter(d Dependencies) http.Handler {
 	proxy := newReverseProxy(d.Cfg)
 	idTokenCache := newTokenCache()
+	sessionTracker := newSessionTracker(d.Cfg.SessionMaxPerUser)
 	metrics := newMetrics(d.Cfg.MetricsEnabled)
 	limiter := newRateLimiter(d.Cfg.RateLimitPerMinute, d.Cfg.RateLimitBurst)
 	secLog := func(format string, args ...interface{}) {
@@ -70,6 +83,57 @@ func NewRouter(d Dependencies) http.Handler {
 		if d.Cfg.DebugLogging {
 			log.Printf("[DBG] "+format, args...)
 		}
+	}
+	// userLog logs user actions with security context for audit purposes.
+	// Format: [USER] action user=<email> ip=<ip> ua=<user-agent> method=<method> path="<path>" req_id=<id> corr_id=<id> [extra fields]
+	userLog := func(r *http.Request, action, user string, extra ...string) {
+		if !d.Cfg.SecurityLogging {
+			return
+		}
+		ip := clientIP(r)
+		ua := r.UserAgent()
+		if len(ua) > 100 {
+			ua = ua[:100] + "..."
+		}
+		if user == "" {
+			user = "<anonymous>"
+		}
+		reqID := requestIDFromContext(r)
+		corrID := correlationIDFromContext(r)
+		msg := fmt.Sprintf("[USER] %s user=%q ip=%s ua=%q method=%s path=%q", action, user, ip, ua, r.Method, r.URL.Path)
+		if reqID != "" {
+			msg += " req_id=" + reqID
+		}
+		if corrID != "" {
+			msg += " corr_id=" + corrID
+		}
+		if len(extra) > 0 {
+			msg += " " + strings.Join(extra, " ")
+		}
+		log.Println(msg)
+	}
+	guardedRedirect := func(w http.ResponseWriter, r *http.Request, target, reason string) {
+		if !shouldGuardRedirect(target) {
+			http.Redirect(w, r, target, http.StatusFound)
+			return
+		}
+		now := time.Now()
+		count, start := readRedirectGuard(r)
+		if start.IsZero() || now.Sub(start) > redirectGuardWindow {
+			start = now
+			count = 0
+		}
+		count++
+		if count > redirectGuardMax {
+			clearRedirectGuardCookie(w)
+			userLog(r, "REDIRECT_LOOP", "", fmt.Sprintf("reason=%s target=%s", reason, target))
+			secLog("redirect loop blocked reason=%s target=%s", reason, target)
+			w.WriteHeader(http.StatusLoopDetected)
+			_, _ = w.Write([]byte("too many redirects; please retry login"))
+			return
+		}
+		writeRedirectGuardCookie(w, start, count)
+		http.Redirect(w, r, target, http.StatusFound)
 	}
 
 	mux := http.NewServeMux()
@@ -147,16 +211,23 @@ func NewRouter(d Dependencies) http.Handler {
 	// Agreement page - shown BEFORE Keycloak auth (no auth required)
 	mux.HandleFunc("/agreement", func(w http.ResponseWriter, r *http.Request) {
 		if d.DisableAgreement {
-			http.Redirect(w, r, "/login", http.StatusFound)
+			guardedRedirect(w, r, "/login", "agreement_disabled")
 			return
 		}
 		sess, _ := d.Sessions.Get(r)
 
 		// If no valid session, force login first so we have a place to store acceptance/next
 		if !isSessionValid(sess) {
+			// Log session timeout if session was previously valid (STIG V-222445)
+			if isSessionExpired(sess) {
+				expiredEmail, _ := sess.Values["email"].(string)
+				if expiredEmail != "" {
+					userLog(r, "SESSION_TIMEOUT", expiredEmail, "reason=session_expired")
+				}
+			}
 			redirect := r.URL.String()
 			dbgLog("agreement: no session, redirecting to login with redirect=%s", redirect)
-			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
+			guardedRedirect(w, r, "/login?redirect="+url.QueryEscape(redirect), "agreement_no_session")
 			return
 		}
 
@@ -166,8 +237,10 @@ func NewRouter(d Dependencies) http.Handler {
 			return
 		}
 		dbgLog("showing agreement page")
+		loginTime, _ := sess.Values["login_time"].(int64)
+		loginIP, _ := sess.Values["login_ip"].(string)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(renderAgreementPage(d.Cfg)))
+		_, _ = w.Write([]byte(renderAgreementPage(d.Cfg, loginTime, loginIP)))
 	})
 
 	// Agreement accept - stores acceptance in session, then redirects to login
@@ -177,17 +250,24 @@ func NewRouter(d Dependencies) http.Handler {
 			return
 		}
 		if d.DisableAgreement {
-			http.Redirect(w, r, "/login", http.StatusFound)
+			guardedRedirect(w, r, "/login", "agreement_accept_disabled")
 			return
 		}
 		sess, _ := d.Sessions.Get(r)
 		if !isSessionValid(sess) {
+			// Log session timeout if session was previously valid (STIG V-222445)
+			if isSessionExpired(sess) {
+				expiredEmail, _ := sess.Values["email"].(string)
+				if expiredEmail != "" {
+					userLog(r, "SESSION_TIMEOUT", expiredEmail, "reason=session_expired")
+				}
+			}
 			redirect := r.URL.Query().Get("redirect")
 			if redirect == "" {
 				redirect = "/"
 			}
 			dbgLog("agreement accept: no valid session, redirecting to login redirect=%s", redirect)
-			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(redirect), http.StatusFound)
+			guardedRedirect(w, r, "/login?redirect="+url.QueryEscape(redirect), "agreement_accept_no_session")
 			return
 		}
 		sess.Values["agreement_accepted"] = true
@@ -199,6 +279,9 @@ func NewRouter(d Dependencies) http.Handler {
 		delete(sess.Values, "agreement_next")
 
 		_ = d.Sessions.Save(r, w, sess)
+		clearRedirectGuardCookie(w)
+		email, _ := sess.Values["email"].(string)
+		userLog(r, "AGREEMENT_ACCEPTED", email)
 		secLog("agreement accepted; redirecting to %s", next)
 		http.Redirect(w, r, next, http.StatusFound)
 	})
@@ -229,6 +312,11 @@ func NewRouter(d Dependencies) http.Handler {
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
+		if hasCookie(r, forceReauthCookieName) {
+			_ = d.Sessions.Clear(r, w)
+			clearForceReauthCookie(w)
+			sess, _ = d.Sessions.Get(r)
+		}
 
 		// Already authenticated?
 		if isSessionValid(sess) {
@@ -265,6 +353,7 @@ func NewRouter(d Dependencies) http.Handler {
 		state := r.URL.Query().Get("state")
 		expectedState, _ := sess.Values["oauth_state"].(string)
 		if expectedState == "" || expectedState != state {
+			userLog(r, "AUTH_REJECTED", "", "reason=state_mismatch")
 			secLog("state mismatch session=%v incoming=%s", sess.Values["oauth_state"], state)
 			clearIDTokenCache(sess, idTokenCache)
 			_ = d.Sessions.Clear(r, w)
@@ -275,6 +364,7 @@ func NewRouter(d Dependencies) http.Handler {
 		// Get PKCE verifier
 		verifier, _ := sess.Values["code_verifier"].(string)
 		if verifier == "" {
+			userLog(r, "AUTH_REJECTED", "", "reason=missing_pkce_verifier")
 			secLog("missing pkce verifier for code exchange")
 			http.Error(w, "missing pkce verifier", http.StatusBadRequest)
 			return
@@ -289,6 +379,7 @@ func NewRouter(d Dependencies) http.Handler {
 		code := r.URL.Query().Get("code")
 		token, err := d.OIDC.Exchange(r.Context(), code, oauth2.SetAuthURLParam("code_verifier", verifier))
 		if err != nil {
+			userLog(r, "AUTH_REJECTED", "", "reason=code_exchange_failed")
 			secLog("code exchange failed: %v", err)
 			http.Error(w, "login failed", http.StatusBadRequest)
 			return
@@ -296,6 +387,7 @@ func NewRouter(d Dependencies) http.Handler {
 
 		rawIDToken, ok := token.Extra("id_token").(string)
 		if !ok {
+			userLog(r, "AUTH_REJECTED", "", "reason=no_id_token")
 			secLog("no id_token returned")
 			http.Error(w, "no id_token in response", http.StatusBadRequest)
 			return
@@ -304,6 +396,7 @@ func NewRouter(d Dependencies) http.Handler {
 
 		idToken, claims, err := d.OIDC.VerifyIDToken(r.Context(), rawIDToken)
 		if err != nil {
+			userLog(r, "AUTH_REJECTED", "", "reason=invalid_token")
 			secLog("invalid id token: %v", err)
 			http.Error(w, "invalid token", http.StatusBadRequest)
 			return
@@ -323,6 +416,12 @@ func NewRouter(d Dependencies) http.Handler {
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
 		sess.Values["agreement_accepted"] = false
+		sess.Values["login_time"] = time.Now().Unix()       // Current login (STIG V-222437)
+		sess.Values["login_ip"] = clientIP(r)               // IP of current login
+
+		// Generate unique session ID for session tracking (STIG V-222387)
+		sessionID := randomString(32)
+		sess.Values["session_id"] = sessionID
 
 		// Determine login ID (used for logs and fallback)
 		loginID := claims.Email
@@ -349,9 +448,11 @@ func NewRouter(d Dependencies) http.Handler {
 				sess.Values["access_request_groups"] = claims.Groups
 				sess.Values["access_request_sub"] = claims.Subject
 				_ = d.Sessions.Save(r, w, sess)
+				userLog(r, "ACCESS_DENIED", claims.Email, "reason=no_account")
 				http.Redirect(w, r, "/access-request", http.StatusFound)
 				return
 			}
+			userLog(r, "ACCESS_DENIED", loginID, "reason=user_sync_failed")
 			secLog("ensure user failed loginID=%s: %v", loginID, err)
 			http.Error(w, "failed to sync user", http.StatusBadGateway)
 			return
@@ -360,13 +461,23 @@ func NewRouter(d Dependencies) http.Handler {
 		// Get SSO token from AnythingLLM
 		tokenResp, err := d.LLM.IssueAuthToken(r.Context(), userID)
 		if err != nil {
+			userLog(r, "ACCESS_DENIED", loginID, fmt.Sprintf("reason=token_issuance_failed userID=%s", userID))
 			secLog("issue auth token failed userID=%s: %v", userID, err)
 			http.Error(w, "failed to issue sso token", http.StatusBadGateway)
 			return
 		}
 
 		_ = d.Sessions.Save(r, w, sess)
+		userLog(r, "LOGIN_SUCCESS", loginID, fmt.Sprintf("userID=%s", userID))
 		secLog("login success userID=%s loginID=%s", userID, loginID)
+		clearRedirectGuardCookie(w)
+
+		// Register session and invalidate any over-limit sessions (STIG V-222387)
+		invalidated := sessionTracker.Register(claims.Email, sessionID, clientIP(r))
+		for _, oldSessID := range invalidated {
+			userLog(r, "SESSION_REVOKED", loginID, fmt.Sprintf("reason=session_limit_exceeded old_session=%s", oldSessID))
+			secLog("session revoked due to limit: user=%s old_session=%s", loginID, oldSessID)
+		}
 
 		// Build redirect path
 		redirectPath := tokenResp.LoginPath
@@ -389,9 +500,13 @@ func NewRouter(d Dependencies) http.Handler {
 	// Logout
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
+		email, _ := sess.Values["email"].(string)
+		sessionID, _ := sess.Values["session_id"].(string)
 		idToken := getIDToken(sess, idTokenCache)
 		clearIDTokenCache(sess, idTokenCache)
+		sessionTracker.Remove(email, sessionID)
 		_ = d.Sessions.Clear(r, w)
+		userLog(r, "LOGOUT", email)
 		secLog("logout local session cleared")
 		http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
 	})
@@ -403,12 +518,18 @@ func NewRouter(d Dependencies) http.Handler {
 
 		// Handle logout paths early to avoid hanging on downstream redirects.
 		if strings.Contains(path, "logout") {
-			idToken := getIDToken(sess, idTokenCache)
-			clearIDTokenCache(sess, idTokenCache)
-			_ = d.Sessions.Clear(r, w)
-			secLog("logout requested; local session cleared path=%s", r.URL.Path)
-			http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
-			return
+			if isLogoutPath(path) {
+				email, _ := sess.Values["email"].(string)
+				sessionID, _ := sess.Values["session_id"].(string)
+				idToken := getIDToken(sess, idTokenCache)
+				clearIDTokenCache(sess, idTokenCache)
+				sessionTracker.Remove(email, sessionID)
+				_ = d.Sessions.Clear(r, w)
+				userLog(r, "LOGOUT", email, fmt.Sprintf("path=%s", r.URL.Path))
+				secLog("logout requested; local session cleared path=%s", r.URL.Path)
+				http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
+				return
+			}
 		}
 
 		// Skip auth for static assets to prevent parallel auth flows
@@ -439,6 +560,7 @@ func NewRouter(d Dependencies) http.Handler {
 								if !strings.HasPrefix(redirectPath, "/") {
 									redirectPath = "/" + redirectPath
 								}
+								userLog(r, "TOKEN_REISSUED", email, fmt.Sprintf("userID=%s", userID))
 								secLog("sso token re-issued userID=%s email=%s", userID, email)
 								http.Redirect(w, r, redirectPath, http.StatusFound)
 								return
@@ -469,8 +591,28 @@ func NewRouter(d Dependencies) http.Handler {
 
 		// Check authentication first
 		if !isSessionValid(sess) {
+			// Log session timeout if session was previously valid (STIG V-222445)
+			if isSessionExpired(sess) {
+				expiredEmail, _ := sess.Values["email"].(string)
+				if expiredEmail != "" {
+					userLog(r, "SESSION_TIMEOUT", expiredEmail, "reason=session_expired")
+					secLog("session expired for user=%s", expiredEmail)
+				}
+			}
 			dbgLog("main: not authenticated, redirecting to login")
-			http.Redirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
+			guardedRedirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), "main_no_session")
+			return
+		}
+
+		// Check if session is still valid (not superseded by newer login) - STIG V-222387
+		email, _ := sess.Values["email"].(string)
+		sessionID, _ := sess.Values["session_id"].(string)
+		if !sessionTracker.IsValid(email, sessionID) {
+			userLog(r, "SESSION_INVALID", email, "reason=superseded_by_new_login")
+			secLog("session invalidated (superseded): user=%s session=%s", email, sessionID)
+			clearIDTokenCache(sess, idTokenCache)
+			_ = d.Sessions.Clear(r, w)
+			guardedRedirect(w, r, "/login?redirect="+url.QueryEscape(r.URL.String()), "session_invalid")
 			return
 		}
 
@@ -478,7 +620,7 @@ func NewRouter(d Dependencies) http.Handler {
 		if !d.DisableAgreement {
 			if accepted, _ := sess.Values["agreement_accepted"].(bool); !accepted {
 				dbgLog("main: agreement not accepted, redirecting to agreement")
-				http.Redirect(w, r, "/agreement?redirect="+url.QueryEscape(r.URL.String()), http.StatusFound)
+				guardedRedirect(w, r, "/agreement?redirect="+url.QueryEscape(r.URL.String()), "agreement_required")
 				return
 			}
 		}
@@ -500,6 +642,7 @@ func NewRouter(d Dependencies) http.Handler {
 	if d.Cfg.AccessLogging {
 		handler = withAccessLog(handler)
 	}
+	handler = withRequestID(handler)
 	return handler
 }
 
@@ -534,6 +677,7 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 		if !(strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/sso/")) &&
 			(resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || isLoginRedirect(resp)) {
 			expireProxyCookie(resp)
+			setForceReauthHeader(resp)
 			resp.StatusCode = http.StatusFound
 			resp.Header.Set("Location", "/login")
 			resp.Body = io.NopCloser(bytes.NewBuffer(nil))
@@ -596,14 +740,36 @@ func withAccessLog(next http.Handler) http.Handler {
 		}
 		rec := &statusRecorder{ResponseWriter: w}
 		start := time.Now()
-		requestID := r.Header.Get("X-Request-Id")
-		if requestID == "" {
-			requestID = randomString(12)
-			rec.Header().Set("X-Request-Id", requestID)
-		}
 		next.ServeHTTP(rec, r)
 		duration := time.Since(start)
-		log.Printf("%s %s %s %d %d %s", clientIP(r), r.Method, r.URL.Path, rec.status, rec.size, duration)
+		status := rec.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		reqID := requestIDFromContext(r)
+		corrID := correlationIDFromContext(r)
+		log.Printf("ip=%s method=%s path=%q status=%d bytes=%d duration=%s req_id=%s corr_id=%s",
+			clientIP(r), r.Method, r.URL.Path, status, rec.size, duration, reqID, corrID)
+	})
+}
+
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+		if reqID == "" {
+			reqID = randomString(12)
+			r.Header.Set("X-Request-Id", reqID)
+		}
+		corrID := strings.TrimSpace(r.Header.Get("X-Correlation-Id"))
+		if corrID == "" {
+			corrID = reqID
+			r.Header.Set("X-Correlation-Id", corrID)
+		}
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, reqID)
+		ctx = context.WithValue(ctx, ctxKeyCorrelationID, corrID)
+		w.Header().Set("X-Request-Id", reqID)
+		w.Header().Set("X-Correlation-Id", corrID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -740,6 +906,13 @@ func withRateLimit(next http.Handler, limiter *rateLimiter) http.Handler {
 			key = "unknown"
 		}
 		if !limiter.allow(key) {
+			ua := r.UserAgent()
+			if len(ua) > 100 {
+				ua = ua[:100] + "..."
+			}
+			reqID := requestIDFromContext(r)
+			corrID := correlationIDFromContext(r)
+			log.Printf("[USER] RATE_LIMITED user=%q ip=%s ua=%q req_id=%s corr_id=%s", "<by-ip>", key, ua, reqID, corrID)
 			w.WriteHeader(http.StatusTooManyRequests)
 			_, _ = w.Write([]byte("rate limit exceeded"))
 			return
@@ -766,6 +939,125 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+func requestIDFromContext(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if v, ok := r.Context().Value(ctxKeyRequestID).(string); ok {
+		return v
+	}
+	return strings.TrimSpace(r.Header.Get("X-Request-Id"))
+}
+
+func correlationIDFromContext(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if v, ok := r.Context().Value(ctxKeyCorrelationID).(string); ok {
+		return v
+	}
+	return strings.TrimSpace(r.Header.Get("X-Correlation-Id"))
+}
+
+func hasCookie(r *http.Request, name string) bool {
+	if r == nil || name == "" {
+		return false
+	}
+	_, err := r.Cookie(name)
+	return err == nil
+}
+
+func clearForceReauthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     forceReauthCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func setForceReauthHeader(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	c := (&http.Cookie{
+		Name:     forceReauthCookieName,
+		Value:    "1",
+		Path:     "/",
+		MaxAge:   60,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}).String()
+	resp.Header.Add("Set-Cookie", c)
+}
+
+func shouldGuardRedirect(target string) bool {
+	return strings.HasPrefix(target, "/login") || strings.HasPrefix(target, "/agreement")
+}
+
+func readRedirectGuard(r *http.Request) (int, time.Time) {
+	if r == nil {
+		return 0, time.Time{}
+	}
+	c, err := r.Cookie(redirectGuardCookieName)
+	if err != nil || c == nil {
+		return 0, time.Time{}
+	}
+	parts := strings.SplitN(c.Value, ":", 2)
+	if len(parts) != 2 {
+		return 0, time.Time{}
+	}
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, time.Time{}
+	}
+	count, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, time.Time{}
+	}
+	return count, time.Unix(ts, 0)
+}
+
+func writeRedirectGuardCookie(w http.ResponseWriter, start time.Time, count int) {
+	if w == nil || start.IsZero() {
+		return
+	}
+	val := fmt.Sprintf("%d:%d", start.Unix(), count)
+	http.SetCookie(w, &http.Cookie{
+		Name:     redirectGuardCookieName,
+		Value:    val,
+		Path:     "/",
+		MaxAge:   int((redirectGuardWindow * 2).Seconds()),
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearRedirectGuardCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     redirectGuardCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func isLogoutPath(path string) bool {
+	if path == "" {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "logout" {
+			return true
+		}
+	}
+	return false
+}
+
 func pickName(c *auth.TokenClaims) string {
 	if c == nil {
 		return ""
@@ -779,18 +1071,27 @@ func pickName(c *auth.TokenClaims) string {
 	return c.Email
 }
 
-func renderAgreementPage(cfg config.Config) string {
+func renderAgreementPage(cfg config.Config, loginTime int64, loginIP string) string {
+	// Format login time for display (STIG V-222437)
+	loginInfo := ""
+	if loginTime > 0 {
+		t := time.Unix(loginTime, 0)
+		loginInfo = fmt.Sprintf(`<p class="login-info">Current login: %s from %s</p>`,
+			html.EscapeString(t.Format("2006-01-02 15:04:05 MST")),
+			html.EscapeString(loginIP))
+	}
 	body := fmt.Sprintf(`
 <div class="proxy-agreement-modal">
   <div class="proxy-agreement-card">
     <h1>%s</h1>
     <p>%s</p>
+    %s
     <form method="POST" action="/agreement/accept">
       <button type="submit">%s</button>
     </form>
   </div>
 </div>
-`, html.EscapeString(cfg.AgreementTitle), html.EscapeString(cfg.AgreementBody), html.EscapeString(cfg.AgreementButtonText))
+`, html.EscapeString(cfg.AgreementTitle), html.EscapeString(cfg.AgreementBody), loginInfo, html.EscapeString(cfg.AgreementButtonText))
 	return injectBanners(agreementHTML(body), cfg)
 }
 
@@ -1151,6 +1452,31 @@ func isSessionValid(sess *sessions.Session) bool {
 	return expiry.After(time.Now().Add(-5 * time.Minute))
 }
 
+// isSessionExpired returns true if the session had a valid expiry that is now past.
+// This is used for audit logging of session timeouts (STIG V-222445).
+func isSessionExpired(sess *sessions.Session) bool {
+	if sess == nil {
+		return false
+	}
+	rawExp, ok := sess.Values["expiry"]
+	if !ok {
+		return false // no expiry = never was valid, not "expired"
+	}
+	var expiry time.Time
+	switch v := rawExp.(type) {
+	case int64:
+		expiry = time.Unix(v, 0)
+	case int:
+		expiry = time.Unix(int64(v), 0)
+	case float64:
+		expiry = time.Unix(int64(v), 0)
+	default:
+		return false
+	}
+	// Session is expired if expiry is in the past (with 5 min grace period)
+	return !expiry.After(time.Now().Add(-5 * time.Minute))
+}
+
 func oauth2AccessTypeOffline() oauth2.AuthCodeOption {
 	return oauth2.SetAuthURLParam("access_type", "offline")
 }
@@ -1237,6 +1563,106 @@ func clearIDTokenCache(sess *sessions.Session, cache *tokenCache) {
 		cache.Delete(key)
 	}
 	delete(sess.Values, "id_token_key")
+}
+
+// sessionTracker enforces max concurrent sessions per user.
+// When a user exceeds the limit, their oldest session is invalidated.
+type sessionTracker struct {
+	mu       sync.Mutex
+	limit    int                       // max sessions per user (0 = unlimited)
+	sessions map[string][]sessionEntry // email -> list of session IDs
+}
+
+type sessionEntry struct {
+	sessionID string
+	createdAt time.Time
+	ip        string
+}
+
+func newSessionTracker(limit int) *sessionTracker {
+	return &sessionTracker{
+		limit:    limit,
+		sessions: make(map[string][]sessionEntry),
+	}
+}
+
+// Register adds a new session for a user, returning any sessions that should be invalidated.
+func (t *sessionTracker) Register(email, sessionID, ip string) []string {
+	if t == nil || t.limit <= 0 || email == "" || sessionID == "" {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	entry := sessionEntry{sessionID: sessionID, createdAt: time.Now(), ip: ip}
+	existing := t.sessions[email]
+
+	// Check if this session ID already exists (re-registration)
+	for i, e := range existing {
+		if e.sessionID == sessionID {
+			existing[i] = entry // update timestamp/ip
+			t.sessions[email] = existing
+			return nil
+		}
+	}
+
+	// Add new session
+	existing = append(existing, entry)
+
+	// If over limit, remove oldest sessions
+	var invalidated []string
+	for len(existing) > t.limit {
+		invalidated = append(invalidated, existing[0].sessionID)
+		existing = existing[1:]
+	}
+	t.sessions[email] = existing
+	return invalidated
+}
+
+// IsValid checks if a session ID is still valid for the given user.
+func (t *sessionTracker) IsValid(email, sessionID string) bool {
+	if t == nil || t.limit <= 0 || email == "" || sessionID == "" {
+		return true // no tracking = always valid
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for _, e := range t.sessions[email] {
+		if e.sessionID == sessionID {
+			return true
+		}
+	}
+	return false
+}
+
+// Remove removes a session from tracking (on logout).
+func (t *sessionTracker) Remove(email, sessionID string) {
+	if t == nil || t.limit <= 0 || email == "" || sessionID == "" {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	existing := t.sessions[email]
+	for i, e := range existing {
+		if e.sessionID == sessionID {
+			t.sessions[email] = append(existing[:i], existing[i+1:]...)
+			if len(t.sessions[email]) == 0 {
+				delete(t.sessions, email)
+			}
+			return
+		}
+	}
+}
+
+// RemoveAll removes all sessions for a user (on explicit logout).
+func (t *sessionTracker) RemoveAll(email string) {
+	if t == nil || t.limit <= 0 || email == "" {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.sessions, email)
 }
 
 func sanitizeRedirect(raw string) string {
