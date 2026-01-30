@@ -8,8 +8,6 @@ proxy:
     enabled: false
   autoscaling:
     enabled: false
-  networkPolicy:
-    enabled: false
 
 anythingllm:
   serviceAccount:
@@ -18,8 +16,6 @@ anythingllm:
   podDisruptionBudget:
     enabled: false
   autoscaling:
-    enabled: false
-  networkPolicy:
     enabled: false
   persistence:
     storageClass: ""

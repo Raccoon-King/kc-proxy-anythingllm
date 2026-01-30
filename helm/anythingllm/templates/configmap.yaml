@@ -3,12 +3,12 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "anythingllm.fullname" . }}
-  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "anythingllm.labels" . | nindent 4 }}
 data:
   {{- range $key, $val := .Values.env }}
+  {{- if and (ne $key "JWT_SECRET") $val }}
   {{ $key }}: "{{ $val }}"
+  {{- end }}
   {{- end }}
 {{- end }}

@@ -1,0 +1,115 @@
+================================================================================
+                    AnythingLLM Stack Deployment Summary
+================================================================================
+
+Components deployed:
+  - Keycloak Proxy (authentication gateway)
+  - AnythingLLM (LLM interface)
+  - Weaviate (vector database)
+
+--------------------------------------------------------------------------------
+                              ACCESS
+--------------------------------------------------------------------------------
+{{- if .Values.proxy.ingress.enabled }}
+{{- $host := (index .Values.proxy.ingress.hosts 0).host }}
+{{- if $host }}
+  Application URL: http{{ if $.Values.proxy.ingress.tls }}s{{ end }}://{{ $host }}
+{{- else }}
+  WARNING: Ingress host not configured!
+  Set: --set proxy.ingress.hosts[0].host=your-hostname
+{{- end }}
+{{- else }}
+  Ingress disabled. Use port-forward:
+    kubectl port-forward svc/proxy 8080:8080 -n {{ .Release.Namespace }}
+    URL: http://localhost:8080
+{{- end }}
+
+--------------------------------------------------------------------------------
+                           VERIFICATION
+--------------------------------------------------------------------------------
+Check pod status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Check startup order (init containers):
+  kubectl logs -n {{ .Release.Namespace }} deploy/proxy -c wait-for-anythingllm
+  kubectl logs -n {{ .Release.Namespace }} deploy/anythingllm -c wait-for-weaviate
+
+Check application logs:
+  kubectl logs -n {{ .Release.Namespace }} deploy/proxy
+  kubectl logs -n {{ .Release.Namespace }} deploy/anythingllm
+  kubectl logs -n {{ .Release.Namespace }} sts/weaviate
+
+--------------------------------------------------------------------------------
+                        CONFIGURATION CHECKLIST
+--------------------------------------------------------------------------------
+{{- $issues := list }}
+{{- if not .Values.proxy.env.KEYCLOAK_ISSUER_URL }}
+{{- $issues = append $issues "proxy.env.KEYCLOAK_ISSUER_URL is not set" }}
+{{- end }}
+{{- if not .Values.proxy.env.KEYCLOAK_CLIENT_ID }}
+{{- $issues = append $issues "proxy.env.KEYCLOAK_CLIENT_ID is not set" }}
+{{- end }}
+{{- if not .Values.proxy.env.KEYCLOAK_REDIRECT_URL }}
+{{- $issues = append $issues "proxy.env.KEYCLOAK_REDIRECT_URL is not set" }}
+{{- end }}
+{{- if not .Values.proxy.env.KEYCLOAK_EXTERNAL_URL }}
+{{- $issues = append $issues "proxy.env.KEYCLOAK_EXTERNAL_URL is not set" }}
+{{- end }}
+{{- if not .Values.anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT }}
+{{- $issues = append $issues "anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT is not set" }}
+{{- end }}
+{{- if not (index .Values.proxy.ingress.hosts 0).host }}
+{{- $issues = append $issues "proxy.ingress.hosts[0].host is not set" }}
+{{- end }}
+
+{{- if $issues }}
+WARNING: Missing required configuration!
+{{ range $issues }}  - {{ . }}
+{{ end }}
+Fix with helm upgrade:
+  helm upgrade {{ .Release.Name }} . -n {{ .Release.Namespace }} \
+    --set proxy.env.KEYCLOAK_ISSUER_URL=https://keycloak.example.com/realms/myrealm \
+    --set proxy.env.KEYCLOAK_CLIENT_ID=my-client \
+    --set proxy.env.KEYCLOAK_REDIRECT_URL=https://app.example.com/auth/callback \
+    --set proxy.env.KEYCLOAK_EXTERNAL_URL=https://keycloak.example.com/realms/myrealm \
+    --set proxy.ingress.hosts[0].host=app.example.com \
+    --set anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT=https://app.example.com/login
+{{- else }}
+All required environment variables are configured.
+{{- end }}
+
+--------------------------------------------------------------------------------
+                           SECRETS
+--------------------------------------------------------------------------------
+Required secrets (set at install/upgrade):
+  - proxy.secretEnv.KEYCLOAK_CLIENT_SECRET (from Keycloak)
+  - proxy.secretEnv.SESSION_SECRET (random string)
+
+Optional secrets:
+  - proxy.secretEnv.ANYLLM_API_KEY (for user sync)
+  - anythingllm.secretEnv.WEAVIATE_API_KEY (if Weaviate auth enabled)
+
+Generate secrets:
+  export SESSION_SECRET=$(openssl rand -hex 32)
+  helm upgrade {{ .Release.Name }} . -n {{ .Release.Namespace }} \
+    --set proxy.secretEnv.SESSION_SECRET=$SESSION_SECRET \
+    --set proxy.secretEnv.KEYCLOAK_CLIENT_SECRET=<from-keycloak>
+
+--------------------------------------------------------------------------------
+                         TROUBLESHOOTING
+--------------------------------------------------------------------------------
+ERR_TOO_MANY_REDIRECTS:
+  - Clear browser cookies (especially 'anythingllm_proxy')
+  - Visit /logout endpoint first
+
+Authentication failures:
+  - Verify KEYCLOAK_REDIRECT_URL matches ingress host
+  - Check Keycloak client has correct redirect URIs configured
+  - Ensure KEYCLOAK_EXTERNAL_URL is browser-accessible
+
+Pods not starting:
+  - Check init container logs (waiting for dependencies)
+  - Verify PVC is bound: kubectl get pvc -n {{ .Release.Namespace }}
+  - Check resource limits vs available cluster resources
+
+================================================================================

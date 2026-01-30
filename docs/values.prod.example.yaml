@@ -27,26 +27,6 @@ proxy:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
-  networkPolicy:
-    enabled: true
-    policyTypes: ["Ingress", "Egress"]
-    ingress:
-      - from:
-          - namespaceSelector: {}
-        ports:
-          - protocol: TCP
-            port: 8080
-    egress:
-      - to:
-          - namespaceSelector: {}
-        ports:
-          - protocol: TCP
-            port: 3001
-      - to:
-          - namespaceSelector: {}
-        ports:
-          - protocol: TCP
-            port: 8080
 
 anythingllm:
   image:
@@ -67,21 +47,6 @@ anythingllm:
   podDisruptionBudget:
     enabled: true
     minAvailable: 1
-  networkPolicy:
-    enabled: true
-    policyTypes: ["Ingress", "Egress"]
-    ingress:
-      - from:
-          - namespaceSelector: {}
-        ports:
-          - protocol: TCP
-            port: 3001
-    egress:
-      - to:
-          - namespaceSelector: {}
-        ports:
-          - protocol: TCP
-            port: 80
 
 weaviate:
   image:

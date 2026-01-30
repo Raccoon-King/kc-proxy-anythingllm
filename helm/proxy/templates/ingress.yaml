@@ -3,11 +3,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ default (include "proxy.fullname" .) .Values.ingress.nameOverride }}
-  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ include "proxy.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- include "proxy.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -18,7 +15,7 @@ spec:
   {{- end }}
   rules:
     {{- range .Values.ingress.hosts }}
-    - host: {{ .host }}
+    - host: {{ .host | quote }}
       http:
         paths:
           {{- range .paths }}

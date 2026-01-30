@@ -1,6 +1,5 @@
 nameOverride: ""
 fullnameOverride: ""
-namespace: ""
 
 image:
   registry: harbor.localhost
@@ -50,12 +49,6 @@ podDisruptionBudget:
   minAvailable: 1
   maxUnavailable: null
 
-networkPolicy:
-  enabled: false
-  ingress: []
-  egress: []
-  policyTypes: []
-
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -65,10 +58,21 @@ podSecurityContext:
     type: RuntimeDefault
 
 containerSecurityContext:
+  # Note: readOnlyRootFilesystem must be false for AnythingLLM
+  # as it writes to the storage directory
   readOnlyRootFilesystem: false
   allowPrivilegeEscalation: false
   capabilities:
     drop: ["ALL"]
+
+# Init container to wait for Weaviate before starting
+initContainers:
+  waitForWeaviate:
+    enabled: true
+    image: busybox:1.36
+    host: weaviate
+    port: 80
+    sleepSeconds: 2
 
 configMap:
   create: true
@@ -83,36 +87,55 @@ persistence:
 
 storageDir: /app/server/storage
 
+# Environment variables
+# IMPORTANT: Update SIMPLE_SSO_NO_LOGIN_REDIRECT for your environment
 env:
   STORAGE_DIR: /app/server/storage
   SIMPLE_SSO_ENABLED: "true"
   SIMPLE_SSO_NO_LOGIN: "true"
-  SIMPLE_SSO_NO_LOGIN_REDIRECT: "http://proxy.localhost/login"
+  # REQUIRED: Set to your proxy URL
+  SIMPLE_SSO_NO_LOGIN_REDIRECT: ""  # e.g., https://app.example.com/login
   VECTOR_DB: "weaviate"
+  # Internal service URL - usually doesn't need changing
   WEAVIATE_ENDPOINT: "http://weaviate:80"
-  JWT_SECRET: "88b55eacfb325fd1b8417bf544f3c2c99ab2e2675d0c3348f716f27907afaf9a"
+  # JWT_SECRET: Leave empty to auto-generate, or set a specific value
+  # WARNING: If auto-generated, it changes on each upgrade (users get logged out)
+  # For production, set a stable value: --set anythingllm.env.JWT_SECRET=$(openssl rand -hex 32)
+  JWT_SECRET: ""
 
 extraEnv: []
 
+# Secrets - set via --set or external secret
 secretEnv:
   WEAVIATE_API_KEY: ""
 
+# Use existing secret instead of creating one
 existingSecret: ""
+
+# Startup probe - allows longer initialization time
+startupProbe:
+  enabled: true
+  tcpSocket:
+    port: 3001
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 60  # 60 * 5s = 300s max startup time
 
 livenessProbe:
   enabled: true
   tcpSocket:
     port: 3001
-  initialDelaySeconds: 20
+  initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 2
-  failureThreshold: 5
+  failureThreshold: 3
 
 readinessProbe:
   enabled: true
   tcpSocket:
     port: 3001
-  initialDelaySeconds: 10
+  initialDelaySeconds: 0
   periodSeconds: 5
   timeoutSeconds: 2
-  failureThreshold: 5
+  failureThreshold: 3

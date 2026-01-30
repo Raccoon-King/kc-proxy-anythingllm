@@ -3,15 +3,12 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "anythingllm.fullname" . }}
-  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "anythingllm.labels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "anythingllm.selectorLabels" . | nindent 6 }}
   {{- if .Values.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
   {{- else if .Values.podDisruptionBudget.maxUnavailable }}

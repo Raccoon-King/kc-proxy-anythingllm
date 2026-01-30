@@ -938,7 +938,7 @@ func injectBanners(htmlBody string, cfg config.Config) string {
 	if strings.Contains(htmlBody, "proxy-banner-top") {
 		return htmlBody
 	}
-style := fmt.Sprintf(`<style>
+	style := fmt.Sprintf(`<style>
 :root {
   --proxy-banner-height: 24px;
   --proxy-bg: #0b1020;
@@ -1060,7 +1060,7 @@ main {
   transform: translateY(-1px);
   box-shadow: 0 14px 30px rgba(20, 184, 166, 0.4);
 }
-</style>`, cssSafe(cfg.BannerBgColor), cssSafe(cfg.BannerTextColor), cssSafe(cfg.BannerBgColor), cssSafe(cfg.BannerTextColor))
+</style>`, cssSafe(cfg.BannerBgColor), cssSafe(cfg.BannerTextColor))
 	// Script to handle SSO logout: when AnythingLLM's frontend navigates to /sso/simple
 	// without a token (after clicking Sign out), redirect to proxy logout to log out
 	// from both the proxy and Keycloak.
