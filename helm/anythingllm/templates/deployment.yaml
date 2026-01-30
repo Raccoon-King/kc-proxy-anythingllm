@@ -2,28 +2,28 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "anythingllm.fullname" . }}
-  namespace: {{ .Values.namespace | default .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "anythingllm.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "anythingllm.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
-        app.kubernetes.io/name: {{ include "anythingllm.name" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- include "anythingllm.selectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
     spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ include "anythingllm.fullname" . }}
@@ -31,14 +31,36 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
       automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
-      {{- if .Values.imagePullSecrets }}
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
-        {{- range .Values.imagePullSecrets }}
+        {{- range . }}
         - name: {{ . }}
         {{- end }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.initContainers.waitForWeaviate.enabled }}
+      initContainers:
+        - name: wait-for-weaviate
+          image: {{ .Values.initContainers.waitForWeaviate.image }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Weaviate at {{ .Values.initContainers.waitForWeaviate.host }}:{{ .Values.initContainers.waitForWeaviate.port }}..."
+              until nc -z {{ .Values.initContainers.waitForWeaviate.host }} {{ .Values.initContainers.waitForWeaviate.port }}; do
+                echo "Weaviate not ready, waiting..."
+                sleep {{ .Values.initContainers.waitForWeaviate.sleepSeconds }}
+              done
+              echo "Weaviate is ready!"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop: ["ALL"]
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -62,6 +84,7 @@ spec:
           ports:
             - name: http
               containerPort: 3001
+              protocol: TCP
           {{- if or .Values.configMap.create .Values.configMap.name .Values.existingSecret (include "anythingllm.hasSecretEnv" .) }}
           envFrom:
             {{- if or .Values.configMap.create .Values.configMap.name }}
@@ -99,6 +122,10 @@ spec:
           {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            {{- omit .Values.startupProbe "enabled" | toYaml | nindent 12 }}
+          {{- end }}
           {{- if .Values.livenessProbe.enabled }}
           livenessProbe:
             {{- omit .Values.livenessProbe "enabled" | toYaml | nindent 12 }}

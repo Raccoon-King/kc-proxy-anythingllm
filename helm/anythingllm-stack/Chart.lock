@@ -1,0 +1,12 @@
+dependencies:
+- name: anythingllm-proxy
+  repository: file://../proxy
+  version: 1.0.1
+- name: anythingllm
+  repository: file://../anythingllm
+  version: 0.1.0
+- name: weaviate
+  repository: file://../weaviate
+  version: 0.1.0
+digest: sha256:548c8364615eedff288519559362edfe95bdd8d05d5b132e27cda9ec0434da6c
+generated: "2026-01-29T16:10:13.2540509-05:00"

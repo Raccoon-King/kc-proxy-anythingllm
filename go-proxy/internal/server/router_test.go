@@ -69,6 +69,7 @@ func newTestDeps() Dependencies {
 		UpstreamIdleTimeout:  10 * time.Second,
 		UpstreamMaxIdle:      10,
 		UpstreamMaxIdleHost:  5,
+		AccessRequestFields:  []string{"username", "email", "given_name", "family_name", "name", "groups", "sub"},
 	}
 	return Dependencies{
 		Cfg: cfg,

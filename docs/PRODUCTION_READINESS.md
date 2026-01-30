@@ -12,7 +12,6 @@ Use this to move from dev defaults to production-grade deployments.
 ## Kubernetes hardening
 - Enable `podDisruptionBudget` for each chart.
 - Enable `autoscaling` where needed.
-- Enable `networkPolicy` and define explicit `ingress`/`egress` rules.
 - Validate `podSecurityContext` and `containerSecurityContext` against your cluster policy.
 - For strict clusters, keep Weaviate `grpcService.enabled=false` and `service.type=ClusterIP`.
 - Disable Weaviate `initContainers.sysctlInitContainer` if privileged init containers are blocked.

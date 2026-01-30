@@ -1,0 +1,18 @@
+apiVersion: v2
+name: anythingllm-stack
+description: Full AnythingLLM stack with Keycloak proxy authentication and Weaviate vector database
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: anythingllm-proxy
+    version: "1.0.1"
+    repository: "file://../proxy"
+    alias: proxy
+  - name: anythingllm
+    version: "0.1.0"
+    repository: "file://../anythingllm"
+  - name: weaviate
+    version: "0.1.0"
+    repository: "file://../weaviate"

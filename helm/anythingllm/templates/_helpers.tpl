@@ -11,12 +11,40 @@
 {{- end -}}
 {{- end -}}
 
+{{- define "anythingllm.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "anythingllm.labels" -}}
+helm.sh/chart: {{ include "anythingllm.chart" . }}
+app.kubernetes.io/name: {{ include "anythingllm.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | default .Values.image.tag | quote }}
+app.kubernetes.io/component: backend
+app.kubernetes.io/part-of: anythingllm-stack
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{- define "anythingllm.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "anythingllm.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
 {{- define "anythingllm.hasSecretEnv" -}}
-{{- $flags := dict "value" false -}}
-{{- range $k, $v := .Values.secretEnv -}}
-{{- if $v -}}
-{{- $_ := set $flags "value" true -}}
+{{- if .Values.secretEnv -}}
+{{- if gt (len .Values.secretEnv) 0 -}}
+true
 {{- end -}}
 {{- end -}}
-{{- $flags.value -}}
+{{- end -}}
+
+{{/*
+Generate JWT_SECRET - use provided value or generate random
+*/}}
+{{- define "anythingllm.jwtSecret" -}}
+{{- if .Values.env.JWT_SECRET -}}
+{{- .Values.env.JWT_SECRET -}}
+{{- else -}}
+{{- randAlphaNum 64 -}}
+{{- end -}}
 {{- end -}}

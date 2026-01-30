@@ -1,7 +1,5 @@
 nameOverride: ""
 fullnameOverride: ""
-namespace: ""
-namespace: ""
 
 image:
   registry: harbor.localhost
@@ -51,12 +49,6 @@ podDisruptionBudget:
   minAvailable: 1
   maxUnavailable: null
 
-networkPolicy:
-  enabled: false
-  ingress: []
-  egress: []
-  policyTypes: []
-
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -71,23 +63,38 @@ containerSecurityContext:
   capabilities:
     drop: ["ALL"]
 
+# Init container to wait for AnythingLLM before starting proxy
+initContainers:
+  waitForAnythingllm:
+    enabled: true
+    image: busybox:1.36
+    host: anythingllm
+    port: 3001
+    sleepSeconds: 2
+
 configMap:
   create: true
   name: ""
 
+# Environment variables for the proxy
+# IMPORTANT: Update Keycloak URLs for your environment
 env:
   PORT: "8080"
+  # Internal service URL - usually doesn't need changing
   ANYLLM_URL: "http://anythingllm:3001"
   ANYLLM_AUTO_CREATE: "false"
   ANYLLM_DEFAULT_ROLE: "user"
-  KEYCLOAK_ISSUER_URL: "http://keycloak-dev.auth:8080/realms/mapache"
-  KEYCLOAK_CLIENT_ID: "mapache-client"
-  KEYCLOAK_REDIRECT_URL: "http://proxy.localhost/auth/callback"
-  KEYCLOAK_EXTERNAL_URL: "http://keycloak.localhost/realms/mapache"
+  # REQUIRED: Configure these for your Keycloak instance
+  KEYCLOAK_ISSUER_URL: ""      # e.g., https://keycloak.example.com/realms/myrealm
+  KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
+  KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
+  KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
+  # Session settings - set SESSION_SECURE=true for HTTPS
   SESSION_SECURE: "false"
   SESSION_SAMESITE: "lax"
   SESSION_MAX_AGE_DAYS: "7"
   SESSION_HTTP_ONLY: "true"
+  # Timeouts
   READ_TIMEOUT: "15s"
   WRITE_TIMEOUT: "15s"
   READ_HEADER_TIMEOUT: "5s"
@@ -103,27 +110,33 @@ env:
   ANYLLM_HTTP_TIMEOUT: "10s"
   ANYLLM_RETRY_MAX: "0"
   ANYLLM_RETRY_BACKOFF: "200ms"
+  # Logging
   ACCESS_LOGGING: "true"
   DEBUG_LOGGING: "false"
   SECURITY_LOGGING: "true"
   DEBUG_HTTP: "false"
+  # Metrics and health
   METRICS_ENABLED: "false"
   READINESS_CHECKS: "false"
   READINESS_URL: ""
   READINESS_TIMEOUT: "2s"
+  # Security headers
   SECURITY_HEADERS: "true"
   HEADER_FRAME_OPTIONS: "SAMEORIGIN"
   HEADER_REFERRER_POLICY: "strict-origin-when-cross-origin"
   HEADER_CSP: ""
   HEADER_PERMISSIONS: "geolocation=(), microphone=(), camera=()"
+  # Rate limiting (0 = disabled)
   RATE_LIMIT_PER_MIN: "0"
   RATE_LIMIT_BURST: "0"
 
+# Secrets - set via --set or external secret
 secretEnv:
   ANYLLM_API_KEY: ""
   KEYCLOAK_CLIENT_SECRET: ""
   SESSION_SECRET: ""
 
+# Use existing secret instead of creating one
 existingSecret: ""
 
 ingress:
@@ -132,28 +145,39 @@ ingress:
   annotations: {}
   nameOverride: ""
   hosts:
-    - host: proxy.localhost
+    - host: ""  # REQUIRED: Set your ingress hostname
       paths:
         - path: /
           pathType: Prefix
   tls: []
+
+# Startup probe - allows longer initialization time
+startupProbe:
+  enabled: true
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 2
+  failureThreshold: 30  # 30 * 5s = 150s max startup time
 
 livenessProbe:
   enabled: true
   httpGet:
     path: /healthz
     port: http
-  initialDelaySeconds: 10
+  initialDelaySeconds: 0
   periodSeconds: 10
   timeoutSeconds: 2
-  failureThreshold: 5
+  failureThreshold: 3
 
 readinessProbe:
   enabled: true
   httpGet:
     path: /readyz
     port: http
-  initialDelaySeconds: 10
+  initialDelaySeconds: 0
   periodSeconds: 5
   timeoutSeconds: 2
-  failureThreshold: 5
+  failureThreshold: 3

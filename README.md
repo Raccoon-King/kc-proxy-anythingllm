@@ -133,9 +133,19 @@ Docker builds via `go-proxy/Dockerfile`; `docker compose up -d --build` to rebui
 
 ## Helm charts (Rancher + Argo)
 Charts live under `helm/`:
+- `helm/anythingllm-stack` - **Umbrella chart** (recommended: installs all components)
 - `helm/anythingllm`
 - `helm/proxy`
 - `helm/weaviate` (vendor dependency in `helm/weaviate/charts`)
+
+### Quick Install (Umbrella Chart)
+```bash
+cd helm/anythingllm-stack
+helm dependency update
+helm install anythingllm . \
+  --set proxy.secretEnv.KEYCLOAK_CLIENT_SECRET=your-secret \
+  --set proxy.secretEnv.SESSION_SECRET=$(openssl rand -hex 32)
+```
 
 By default charts install to the release namespace (set `namespace` in values to override).
 Images should point to Harbor (set `image.registry` / `image.repository` / `image.tag` in each chart).
@@ -143,7 +153,7 @@ Proxy secrets are provided via `secretEnv` or `existingSecret`.
 AnythingLLM secrets are provided via `secretEnv` or `existingSecret`.
 
 Production hardening knobs (defaults are safe but off):
-- `autoscaling`, `podDisruptionBudget`, and `networkPolicy` blocks in `values.yaml`.
+- `autoscaling` and `podDisruptionBudget` blocks in `values.yaml`.
 - Security defaults: non-root, seccomp RuntimeDefault, and no SA token by default.
 
 ## Troubleshooting
