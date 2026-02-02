@@ -32,6 +32,7 @@ type Config struct {
 	SessionSameSite           string
 	SessionMaxAgeDays         int
 	SessionHTTPOnly           bool
+	SessionMaxPerUser         int // Max concurrent sessions per user (0 = unlimited, 1 = single session)
 	AutoCreateUsers           bool
 	DefaultRole               string
 	CallbackPath              string
@@ -167,6 +168,7 @@ func Load() Config {
 		SessionSameSite:           getenv("SESSION_SAMESITE", "lax"),
 		SessionMaxAgeDays:         envInt("SESSION_MAX_AGE_DAYS", 7),
 		SessionHTTPOnly:           getenv("SESSION_HTTP_ONLY", "true") != "false",
+		SessionMaxPerUser:         envInt("SESSION_MAX_PER_USER", 1),
 		AutoCreateUsers:           getenv("ANYLLM_AUTO_CREATE", "true") != "false",
 		DefaultRole:               getenv("ANYLLM_DEFAULT_ROLE", "user"),
 		CallbackPath:              getenv("CALLBACK_PATH", "/auth/callback"),
