@@ -305,6 +305,7 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Logged-out page (no auth required)
 	mux.HandleFunc("/logged-out", func(w http.ResponseWriter, r *http.Request) {
+		setForceReauthCookie(w)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(renderLoggedOutPage(d.Cfg)))
 	})
@@ -973,6 +974,20 @@ func clearForceReauthCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func setForceReauthCookie(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     forceReauthCookieName,
+		Value:    "1",
+		Path:     "/",
+		MaxAge:   300,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
