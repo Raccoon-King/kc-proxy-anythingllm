@@ -97,8 +97,89 @@ Create `data/.env` (mounted to `/app/server/.env` inside the container) with at 
 ```
 SIMPLE_SSO_ENABLED=true
 SIMPLE_SSO_NO_LOGIN=true   # optional if you only use SSO
+SIMPLE_SSO_NO_LOGIN_REDIRECT=http://localhost:8080/logged-out
 ```
 See AnythingLLM docs for additional keys: https://docs.anythingllm.com/
+
+### Example env (proxy - full)
+```
+PORT=8080
+APP_ENV=production
+ANYLLM_URL=http://anythingllm:3001
+ANYLLM_API_KEY=REPLACE_ME
+ANYLLM_AUTO_CREATE=false
+ANYLLM_DEFAULT_ROLE=user
+
+KEYCLOAK_ISSUER_URL=https://keycloak.example.com/realms/posaidon
+KEYCLOAK_EXTERNAL_URL=https://keycloak.example.com/realms/posaidon
+KEYCLOAK_CLIENT_ID=posaidon-proxy
+KEYCLOAK_CLIENT_SECRET=REPLACE_ME
+KEYCLOAK_REDIRECT_URL=https://app.example.com/auth/callback
+KEYCLOAK_CA_PATH=
+KEYCLOAK_INSECURE_SKIP_VERIFY=false
+
+SESSION_SECRET=REPLACE_ME
+SESSION_SECURE=true
+SESSION_SAMESITE=lax
+SESSION_MAX_AGE_DAYS=7
+SESSION_HTTP_ONLY=true
+SESSION_MAX_PER_USER=1
+
+BANNER_TOP_TEXT=Authorized Use Only
+BANNER_BOTTOM_TEXT=System Monitored
+BANNER_BG_COLOR=#f6f000
+BANNER_TEXT_COLOR=#000000
+
+AGREEMENT_TITLE=User Agreement
+AGREEMENT_BODY=Please acknowledge and accept this agreement to continue.
+AGREEMENT_BUTTON_TEXT=OK
+DISABLE_AGREEMENT=false
+
+ACCESS_LOGGING=true
+DEBUG_LOGGING=false
+SECURITY_LOGGING=true
+DEBUG_HTTP=false
+METRICS_ENABLED=false
+
+READINESS_CHECKS=false
+READINESS_URL=
+READINESS_TIMEOUT=2s
+
+SECURITY_HEADERS=true
+HEADER_FRAME_OPTIONS=SAMEORIGIN
+HEADER_REFERRER_POLICY=strict-origin-when-cross-origin
+HEADER_PERMISSIONS=geolocation=(), microphone=(), camera=()
+HEADER_CSP=
+
+RATE_LIMIT_PER_MIN=0
+RATE_LIMIT_BURST=0
+
+READ_TIMEOUT=15s
+WRITE_TIMEOUT=15s
+READ_HEADER_TIMEOUT=5s
+IDLE_TIMEOUT=60s
+SHUTDOWN_TIMEOUT=10s
+MAX_HEADER_BYTES=1048576
+UPSTREAM_DIAL_TIMEOUT=10s
+UPSTREAM_TLS_HANDSHAKE_TIMEOUT=10s
+UPSTREAM_RESPONSE_HEADER_TIMEOUT=15s
+UPSTREAM_IDLE_TIMEOUT=60s
+UPSTREAM_MAX_IDLE_CONNS=100
+UPSTREAM_MAX_IDLE_CONNS_PER_HOST=10
+ANYLLM_HTTP_TIMEOUT=10s
+ANYLLM_RETRY_MAX=0
+ANYLLM_RETRY_BACKOFF=200ms
+```
+
+### Example env (AnythingLLM)
+```
+SIMPLE_SSO_ENABLED=true
+SIMPLE_SSO_NO_LOGIN=true
+SIMPLE_SSO_NO_LOGIN_REDIRECT=https://app.example.com/logged-out
+VECTOR_DB=weaviate
+WEAVIATE_ENDPOINT=http://weaviate:80
+JWT_SECRET=REPLACE_ME
+```
 
 ## Flows & edge handling
 - Missing/invalid SSO token on `/sso/*` → redirect to `/login` to restart.
@@ -110,6 +191,7 @@ See AnythingLLM docs for additional keys: https://docs.anythingllm.com/
 - `GET /healthz` — liveness
 - `GET /readyz` — readiness (optional, enable with `READINESS_CHECKS=true`)
 - `GET /metrics` — Prometheus-style metrics (optional, enable with `METRICS_ENABLED=true`)
+- `GET /debug` — Debug report (only available when `DEBUG_LOGGING=true`)
 
 ## Banners & agreement
 - Banners are injected into every HTML response from AnythingLLM.

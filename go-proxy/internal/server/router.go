@@ -138,6 +138,16 @@ func NewRouter(d Dependencies) http.Handler {
 
 	mux := http.NewServeMux()
 
+	// Debug endpoint - diagnostics for proxy/Keycloak/AnythingLLM connectivity
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+		if !d.Cfg.DebugLogging {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(debugReport(d, r)))
+	})
+
 	// Health check - no auth required
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1713,6 +1723,75 @@ func isLoginRedirect(resp *http.Response) bool {
 	}
 	lower := strings.ToLower(loc)
 	return strings.Contains(lower, "/login")
+}
+
+func debugReport(d Dependencies, r *http.Request) string {
+	type checkResult struct {
+		name   string
+		target string
+		status string
+	}
+	results := make([]checkResult, 0, 4)
+
+	checkHTTP := func(name, url string) {
+		status := "skipped"
+		if url != "" {
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+			if err != nil {
+				status = "error: " + err.Error()
+			} else {
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					status = "error: " + err.Error()
+				} else {
+					_ = resp.Body.Close()
+					status = fmt.Sprintf("ok (%d)", resp.StatusCode)
+				}
+			}
+		}
+		results = append(results, checkResult{name: name, target: url, status: status})
+	}
+
+	issuer := strings.TrimSuffix(d.Cfg.KeycloakIssuerURL, "/")
+	wellKnown := ""
+	if issuer != "" {
+		wellKnown = issuer + "/.well-known/openid-configuration"
+	}
+	checkHTTP("keycloak_well_known", wellKnown)
+	checkHTTP("anythingllm_logo", strings.TrimSuffix(d.Cfg.AnythingLLMBaseURL, "/")+"/api/system/logo")
+
+	var b strings.Builder
+	b.WriteString("Proxy Debug Report\n")
+	b.WriteString("==================\n")
+	b.WriteString("Timestamp: " + time.Now().Format(time.RFC3339) + "\n\n")
+
+	b.WriteString("Config (redacted)\n")
+	b.WriteString("  ANYLLM_URL: " + d.Cfg.AnythingLLMBaseURL + "\n")
+	b.WriteString("  KEYCLOAK_ISSUER_URL: " + d.Cfg.KeycloakIssuerURL + "\n")
+	b.WriteString("  KEYCLOAK_EXTERNAL_URL: " + d.Cfg.KeycloakExternalURL + "\n")
+	b.WriteString("  KEYCLOAK_CLIENT_ID: " + d.Cfg.KeycloakClientID + "\n")
+	b.WriteString("  KEYCLOAK_REDIRECT_URL: " + d.Cfg.KeycloakRedirectURL + "\n")
+	b.WriteString("  CALLBACK_PATH: " + d.Cfg.CallbackPath + "\n")
+	b.WriteString("  SESSION_SECURE: " + fmt.Sprintf("%t", d.Cfg.SessionSecure) + "\n")
+	b.WriteString("  SESSION_SAMESITE: " + d.Cfg.SessionSameSite + "\n")
+	b.WriteString("  SECURITY_LOGGING: " + fmt.Sprintf("%t", d.Cfg.SecurityLogging) + "\n")
+	b.WriteString("  DEBUG_LOGGING: " + fmt.Sprintf("%t", d.Cfg.DebugLogging) + "\n\n")
+
+	b.WriteString("Connectivity checks\n")
+	for _, res := range results {
+		b.WriteString("  - " + res.name + ": " + res.status + "\n")
+		if res.target != "" {
+			b.WriteString("    target: " + res.target + "\n")
+		}
+	}
+	b.WriteString("\n")
+	b.WriteString("Notes\n")
+	b.WriteString("  - /debug is only available when DEBUG_LOGGING=true\n")
+	b.WriteString("  - Keycloak check hits issuer well-known discovery endpoint\n")
+	b.WriteString("  - AnythingLLM check hits /api/system/logo (no auth required)\n")
+	return b.String()
 }
 
 // expireProxyCookie adds a Set-Cookie header to drop the proxy session cookie.

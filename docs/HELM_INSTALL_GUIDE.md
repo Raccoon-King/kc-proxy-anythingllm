@@ -40,7 +40,7 @@ helm install anythingllm . -n mynamespace \
   --set proxy.env.KEYCLOAK_CLIENT_ID=my-client \
   --set proxy.env.KEYCLOAK_REDIRECT_URL=https://app.example.com/auth/callback \
   --set proxy.env.KEYCLOAK_EXTERNAL_URL=https://keycloak.example.com/realms/myrealm \
-  --set anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT=https://app.example.com/login \
+  --set anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT=https://app.example.com/logged-out \
   --set proxy.secretEnv.KEYCLOAK_CLIENT_SECRET=your-client-secret \
   --set proxy.secretEnv.SESSION_SECRET=$(openssl rand -hex 32)
 ```
@@ -107,7 +107,7 @@ anythingllm:
     size: 20Gi
 
   env:
-    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://app.example.com/login"
+    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://app.example.com/logged-out"
 
 weaviate:
   weaviate:
@@ -194,7 +194,7 @@ Visit `https://app.example.com` (or `http://localhost:8080` if port-forwarding).
 | `proxy.env.KEYCLOAK_CLIENT_ID` | Keycloak client ID | `my-client` |
 | `proxy.env.KEYCLOAK_REDIRECT_URL` | OAuth callback URL | `https://app.example.com/auth/callback` |
 | `proxy.env.KEYCLOAK_EXTERNAL_URL` | Browser-accessible Keycloak URL | `https://keycloak.example.com/realms/myrealm` |
-| `anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT` | Login redirect URL | `https://app.example.com/login` |
+| `anythingllm.env.SIMPLE_SSO_NO_LOGIN_REDIRECT` | Login redirect URL | `https://app.example.com/logged-out` |
 | `proxy.secretEnv.KEYCLOAK_CLIENT_SECRET` | Keycloak client secret | (from Keycloak) |
 | `proxy.secretEnv.SESSION_SECRET` | Session encryption key | (generate with openssl) |
 

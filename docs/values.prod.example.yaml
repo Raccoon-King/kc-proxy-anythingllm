@@ -35,7 +35,7 @@ anythingllm:
     tag: "v1.0.0"
   existingSecret: "anythingllm"
   env:
-    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://proxy.example.com/login"
+    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://proxy.example.com/logged-out"
     WEAVIATE_ENDPOINT: "http://weaviate:80"
   persistence:
     storageClass: "fast-storage"
