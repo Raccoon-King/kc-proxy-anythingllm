@@ -35,6 +35,13 @@ proxy:
       host: anythingllm
       port: 3001
       sleepSeconds: 2
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
 
   ingress:
     enabled: true
@@ -88,6 +95,13 @@ anythingllm:
       host: weaviate
       port: 80
       sleepSeconds: 2
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
 
   persistence:
     enabled: true

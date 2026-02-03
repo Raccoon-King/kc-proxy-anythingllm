@@ -60,6 +60,10 @@ spec:
             runAsUser: 1000
             capabilities:
               drop: ["ALL"]
+          {{- with .Values.initContainers.waitForWeaviate.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
