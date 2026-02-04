@@ -116,6 +116,8 @@ weaviate:
       size: 20Gi
 ```
 
+See `docs/values.override.example.yaml` for a complete prod-style example.
+
 ### Step 2: Configure Keycloak
 
 In your Keycloak admin console:
