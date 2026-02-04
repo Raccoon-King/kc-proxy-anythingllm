@@ -1819,9 +1819,6 @@ func keycloakLogoutURL(cfg config.Config) string {
 }
 
 func keycloakLogoutURLWithHint(cfg config.Config, idToken string) string {
-	if strings.TrimSpace(idToken) == "" {
-		return "/logged-out"
-	}
 	base := strings.TrimSuffix(cfg.KeycloakExternalURL, "/")
 	if base == "" {
 		base = strings.TrimSuffix(cfg.KeycloakIssuerURL, "/")
