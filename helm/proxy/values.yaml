@@ -86,56 +86,11 @@ configMap:
 # Environment variables for the proxy
 # IMPORTANT: Update Keycloak URLs for your environment
 env:
-  PORT: "8080"
-  # Internal service URL - usually doesn't need changing
-  ANYLLM_URL: "http://anythingllm:3001"
-  ANYLLM_AUTO_CREATE: "false"
-  ANYLLM_DEFAULT_ROLE: "user"
   # REQUIRED: Configure these for your Keycloak instance
   KEYCLOAK_ISSUER_URL: ""      # e.g., https://keycloak.example.com/realms/myrealm
   KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
   KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
   KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
-  # Session settings - set SESSION_SECURE=true for HTTPS
-  SESSION_SECURE: "false"
-  SESSION_SAMESITE: "lax"
-  SESSION_MAX_AGE_DAYS: "7"
-  SESSION_HTTP_ONLY: "true"
-  # Timeouts
-  READ_TIMEOUT: "15s"
-  WRITE_TIMEOUT: "15s"
-  READ_HEADER_TIMEOUT: "5s"
-  IDLE_TIMEOUT: "60s"
-  SHUTDOWN_TIMEOUT: "10s"
-  MAX_HEADER_BYTES: "1048576"
-  UPSTREAM_DIAL_TIMEOUT: "10s"
-  UPSTREAM_TLS_HANDSHAKE_TIMEOUT: "10s"
-  UPSTREAM_RESPONSE_HEADER_TIMEOUT: "15s"
-  UPSTREAM_IDLE_TIMEOUT: "60s"
-  UPSTREAM_MAX_IDLE_CONNS: "100"
-  UPSTREAM_MAX_IDLE_CONNS_PER_HOST: "10"
-  ANYLLM_HTTP_TIMEOUT: "10s"
-  ANYLLM_RETRY_MAX: "0"
-  ANYLLM_RETRY_BACKOFF: "200ms"
-  # Logging
-  ACCESS_LOGGING: "true"
-  DEBUG_LOGGING: "false"
-  SECURITY_LOGGING: "true"
-  DEBUG_HTTP: "false"
-  # Metrics and health
-  METRICS_ENABLED: "false"
-  READINESS_CHECKS: "false"
-  READINESS_URL: ""
-  READINESS_TIMEOUT: "2s"
-  # Security headers
-  SECURITY_HEADERS: "true"
-  HEADER_FRAME_OPTIONS: "SAMEORIGIN"
-  HEADER_REFERRER_POLICY: "strict-origin-when-cross-origin"
-  HEADER_CSP: ""
-  HEADER_PERMISSIONS: "geolocation=(), microphone=(), camera=()"
-  # Rate limiting (0 = disabled)
-  RATE_LIMIT_PER_MIN: "0"
-  RATE_LIMIT_BURST: "0"
 
 # Secrets - set via --set or external secret
 secretEnv:

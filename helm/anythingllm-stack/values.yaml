@@ -55,20 +55,11 @@ proxy:
     tls: []
 
   env:
-    PORT: "8080"
-    # Internal service URL - usually doesn't need changing
-    ANYLLM_URL: "http://anythingllm:3001"
-    ANYLLM_AUTO_CREATE: "false"
-    ANYLLM_DEFAULT_ROLE: "user"
     # REQUIRED: Configure these for your Keycloak instance
     KEYCLOAK_ISSUER_URL: ""      # e.g., https://keycloak.example.com/realms/myrealm
     KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
     KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
     KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
-    # Session settings - set SESSION_SECURE=true for HTTPS
-    SESSION_SECURE: "false"
-    SESSION_SAMESITE: "lax"
-    SESSION_MAX_AGE_DAYS: "7"
 
   # REQUIRED: Set these secrets at install time
   # --set proxy.secretEnv.KEYCLOAK_CLIENT_SECRET=xxx
