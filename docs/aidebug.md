@@ -88,6 +88,14 @@ kubectl exec -n <ns> <proxy-pod> -- curl -sS https://<keycloak-host>/realms/<rea
 - Requires `DEBUG_LOGGING=true`
 - URL: `https://<proxy-host>/debug`
 
+## 7a) Verify /logged-out Is Served by Proxy
+Add a marker and debug header:
+- `X-Proxy-Debug: logged-out`
+- `<!-- proxy-logged-out -->` in HTML body
+- `Cache-Control: no-store`
+
+Then confirm in the browser devtools network tab.
+
 ## 8) Common Failure Patterns
 ### Login Loop
 - When the user says **“routing is in a loop”**, check these first:

@@ -316,8 +316,11 @@ func NewRouter(d Dependencies) http.Handler {
 	// Logged-out page (no auth required)
 	mux.HandleFunc("/logged-out", func(w http.ResponseWriter, r *http.Request) {
 		setForceReauthCookie(w)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Proxy-Debug", "logged-out")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(renderLoggedOutPage(d.Cfg)))
+		body := renderLoggedOutPage(d.Cfg) + "\n<!-- proxy-logged-out -->"
+		_, _ = w.Write([]byte(body))
 	})
 
 	// Login - requires agreement first, then initiates Keycloak auth
