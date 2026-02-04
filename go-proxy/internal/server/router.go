@@ -325,9 +325,11 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Keycloak logout trigger (best-effort, no redirect)
 	mux.HandleFunc("/kc-logout", func(w http.ResponseWriter, r *http.Request) {
+		sess, _ := d.Sessions.Get(r)
+		idToken := getIDToken(sess, idTokenCache)
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, keycloakLogoutURL(d.Cfg), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, keycloakLogoutURLWithHint(d.Cfg, idToken), nil)
 		if err == nil {
 			resp, err := http.DefaultClient.Do(req)
 			if err == nil && resp != nil {
