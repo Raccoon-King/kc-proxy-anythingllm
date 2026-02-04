@@ -430,8 +430,8 @@ func NewRouter(d Dependencies) http.Handler {
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
 		sess.Values["agreement_accepted"] = false
-		sess.Values["login_time"] = time.Now().Unix()       // Current login (STIG V-222437)
-		sess.Values["login_ip"] = clientIP(r)               // IP of current login
+		sess.Values["login_time"] = time.Now().Unix() // Current login (STIG V-222437)
+		sess.Values["login_ip"] = clientIP(r)         // IP of current login
 
 		// Generate unique session ID for session tracking (STIG V-222387)
 		sessionID := randomString(32)
@@ -1815,22 +1815,19 @@ func expireProxyCookie(resp *http.Response) {
 
 // keycloakLogoutURL builds the RP-initiated logout URL for Keycloak.
 func keycloakLogoutURL(cfg config.Config) string {
-	base := strings.TrimSuffix(cfg.KeycloakExternalURL, "/")
-	redirect := cfg.KeycloakRedirectURL
-	if redirect == "" {
-		redirect = "http://localhost:" + cfg.Port + "/"
-	}
-	return fmt.Sprintf("%s/protocol/openid-connect/logout?client_id=%s&redirect_uri=%s",
-		base, url.QueryEscape(cfg.KeycloakClientID), url.QueryEscape(redirect))
+	return keycloakLogoutURLWithHint(cfg, "")
 }
 
 func keycloakLogoutURLWithHint(cfg config.Config, idToken string) string {
 	base := strings.TrimSuffix(cfg.KeycloakExternalURL, "/")
+	if base == "" {
+		base = strings.TrimSuffix(cfg.KeycloakIssuerURL, "/")
+	}
 	redirect := cfg.KeycloakRedirectURL
 	if redirect == "" {
 		redirect = "http://localhost:" + cfg.Port + "/"
 	}
-	query := fmt.Sprintf("client_id=%s&redirect_uri=%s",
+	query := fmt.Sprintf("client_id=%s&post_logout_redirect_uri=%s",
 		url.QueryEscape(cfg.KeycloakClientID), url.QueryEscape(redirect))
 	if idToken != "" {
 		query += "&id_token_hint=" + url.QueryEscape(idToken)

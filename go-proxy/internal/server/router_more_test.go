@@ -341,7 +341,7 @@ func TestKeycloakLogoutURLUsesExternal(t *testing.T) {
 	if !strings.Contains(url, "client_id=mapache-client") {
 		t.Fatalf("missing client id: %s", url)
 	}
-	if !strings.Contains(url, "redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth%2Fcallback") {
+	if !strings.Contains(url, "post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth%2Fcallback") {
 		t.Fatalf("unexpected redirect uri: %s", url)
 	}
 }
