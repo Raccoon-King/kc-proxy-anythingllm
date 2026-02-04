@@ -21,6 +21,7 @@ proxy:
     KEYCLOAK_CLIENT_ID: "posaidon-proxy"
     KEYCLOAK_REDIRECT_URL: "https://mapache-test.mapache.io/auth/callback"
   secretEnv:
+    ANYLLM_API_KEY: "REPLACE_ME"
     KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"
     SESSION_SECRET: "REPLACE_ME"
 
