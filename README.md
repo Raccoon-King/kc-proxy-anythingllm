@@ -60,6 +60,7 @@ Browse to http://localhost:8080 and log in.
 - Timeouts/retries: `READ_TIMEOUT`, `WRITE_TIMEOUT`, `READ_HEADER_TIMEOUT`, `IDLE_TIMEOUT`, `SHUTDOWN_TIMEOUT`, `MAX_HEADER_BYTES`,
   `UPSTREAM_DIAL_TIMEOUT`, `UPSTREAM_TLS_HANDSHAKE_TIMEOUT`, `UPSTREAM_RESPONSE_HEADER_TIMEOUT`, `UPSTREAM_IDLE_TIMEOUT`,
   `UPSTREAM_MAX_IDLE_CONNS`, `UPSTREAM_MAX_IDLE_CONNS_PER_HOST`, `ANYLLM_HTTP_TIMEOUT`, `ANYLLM_RETRY_MAX`, `ANYLLM_RETRY_BACKOFF`
+  - See `env.example` for application-level defaults you can copy.
 
 ### Environment variables (proxy)
 | Name | Default | Notes |
