@@ -5,6 +5,8 @@ proxy:
     repository: mapache/keycloak-proxy-go
     tag: latest
     pullPolicy: IfNotPresent
+  imagePullSecrets:
+    - harbor-pull-secret
   ingress:
     enabled: true
     className: posaidon-nginx
@@ -31,6 +33,8 @@ anythingllm:
     repository: mapache/anythingllm
     tag: latest
     pullPolicy: IfNotPresent
+  imagePullSecrets:
+    - harbor-pull-secret
   env:
     SIMPLE_SSO_NO_LOGIN_REDIRECT: "http://dev.mapache.local/logged-out"
   persistence:
@@ -43,6 +47,8 @@ weaviate:
       repo: posaidon/weaviate
       tag: "1.34.0"
       pullPolicy: IfNotPresent
+      pullSecrets:
+        - harbor-pull-secret
     initContainers:
       sysctlInitContainer:
         image:
@@ -50,5 +56,7 @@ weaviate:
           repo: posaidon/alpine
           tag: latest
           pullPolicy: IfNotPresent
+          pullSecrets:
+            - harbor-pull-secret
     persistence:
       storageClass: posaidon-ebs-sc
