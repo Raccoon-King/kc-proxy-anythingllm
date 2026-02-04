@@ -49,7 +49,7 @@ helm install anythingllm . -n mynamespace \
 
 ### Step 1: Prepare Your Values File
 
-Create a `values-override.yaml` file:
+Create a `values-override.yaml` file (required for env defaults):
 
 ```yaml
 # values-override.yaml
@@ -117,6 +117,8 @@ weaviate:
 ```
 
 See `docs/values.override.example.yaml` for a complete prod-style example.
+
+Note: chart `values.yaml` no longer carries application env defaults. Supply them via your override file or env/configmaps.
 
 ### Step 2: Configure Keycloak
 
