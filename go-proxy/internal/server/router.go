@@ -323,6 +323,20 @@ func NewRouter(d Dependencies) http.Handler {
 		_, _ = w.Write([]byte(body))
 	})
 
+	// Keycloak logout trigger (best-effort, no redirect)
+	mux.HandleFunc("/kc-logout", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, keycloakLogoutURL(d.Cfg), nil)
+		if err == nil {
+			resp, err := http.DefaultClient.Do(req)
+			if err == nil && resp != nil {
+				_ = resp.Body.Close()
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
@@ -430,8 +444,8 @@ func NewRouter(d Dependencies) http.Handler {
 		sess.Values["email"] = claims.Email
 		sess.Values["name"] = pickName(claims)
 		sess.Values["agreement_accepted"] = false
-		sess.Values["login_time"] = time.Now().Unix()       // Current login (STIG V-222437)
-		sess.Values["login_ip"] = clientIP(r)               // IP of current login
+		sess.Values["login_time"] = time.Now().Unix() // Current login (STIG V-222437)
+		sess.Values["login_ip"] = clientIP(r)         // IP of current login
 
 		// Generate unique session ID for session tracking (STIG V-222387)
 		sessionID := randomString(32)
@@ -1141,9 +1155,21 @@ func renderLoggedOutPage(cfg config.Config) string {
   <div class="proxy-agreement-card">
     <h1>%s</h1>
     <p>%s</p>
-    <a href="/login">%s</a>
+    <a href="/agreement" id="proxy-relogin-link">%s</a>
   </div>
-</div>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
+</div>
+<script>
+(function() {
+  var link = document.getElementById('proxy-relogin-link');
+  if (!link) return;
+  link.addEventListener('click', function(ev) {
+    ev.preventDefault();
+    try { navigator.sendBeacon('/kc-logout'); } catch (e) {}
+    fetch('/kc-logout', { method: 'POST' }).catch(function(){});
+    window.location.href = '/agreement';
+  });
+})();
+</script>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
 	return injectBanners(agreementHTML(body), cfg)
 }
 
