@@ -1104,9 +1104,8 @@ func renderAgreementPage(cfg config.Config, loginTime int64, loginIP string) str
 	loginInfo := ""
 	if loginTime > 0 {
 		t := time.Unix(loginTime, 0)
-		loginInfo = fmt.Sprintf(`<p class="login-info">Current login: %s from %s</p>`,
-			html.EscapeString(t.Format("2006-01-02 15:04:05 MST")),
-			html.EscapeString(loginIP))
+		loginInfo = fmt.Sprintf(`<p class="login-info">Current login: %s</p>`,
+			html.EscapeString(t.Format("2006-01-02 15:04:05 MST")))
 	}
 	body := fmt.Sprintf(`
 <div class="proxy-agreement-modal">

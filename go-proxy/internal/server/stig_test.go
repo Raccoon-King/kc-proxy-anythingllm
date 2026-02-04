@@ -328,9 +328,6 @@ func TestAgreementPageShowsLoginTime(t *testing.T) {
 	if !strings.Contains(body, "Current login:") {
 		t.Errorf("expected 'Current login:' in page, got: %s", body[:min(500, len(body))])
 	}
-	if !strings.Contains(body, "192.168.1.100") {
-		t.Errorf("expected IP address in page, got: %s", body[:min(500, len(body))])
-	}
 }
 
 // TestSessionRevokedOnNewLogin tests that old sessions are revoked (STIG V-222387)
@@ -515,9 +512,6 @@ func TestRenderAgreementPageWithLoginInfo(t *testing.T) {
 
 	if !strings.Contains(page, "Current login:") {
 		t.Error("expected 'Current login:' in page")
-	}
-	if !strings.Contains(page, "192.168.1.50") {
-		t.Error("expected IP in page")
 	}
 	if !strings.Contains(page, "2024-01-15") {
 		t.Error("expected date in page")
