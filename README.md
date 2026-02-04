@@ -106,10 +106,7 @@ See AnythingLLM docs for additional keys: https://docs.anythingllm.com/
 ```
 PORT=8080
 APP_ENV=production
-ANYLLM_URL=http://anythingllm:3001
 ANYLLM_API_KEY=REPLACE_ME
-ANYLLM_AUTO_CREATE=false
-ANYLLM_DEFAULT_ROLE=user
 
 KEYCLOAK_ISSUER_URL=https://keycloak.example.com/realms/posaidon
 KEYCLOAK_EXTERNAL_URL=https://keycloak.example.com/realms/posaidon
@@ -171,6 +168,7 @@ ANYLLM_HTTP_TIMEOUT=10s
 ANYLLM_RETRY_MAX=0
 ANYLLM_RETRY_BACKOFF=200ms
 ```
+Note: `ANYLLM_URL`, `ANYLLM_AUTO_CREATE`, and `ANYLLM_DEFAULT_ROLE` are typically set via Helm values/configmaps rather than local env files.
 
 ### Example env (AnythingLLM)
 ```
