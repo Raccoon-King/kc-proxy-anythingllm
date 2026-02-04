@@ -3,6 +3,23 @@
 This guide is for AI-assisted debugging of the AnythingLLM + Proxy + Weaviate stack in Rancher/Kubernetes.  
 **Human-in-the-loop is mandatory.** The AI must ask before making any changes and must report findings clearly.
 
+## How the App Works (Logic Overview)
+- **Browser → Proxy → AnythingLLM** for all user traffic.
+- **Proxy → Keycloak** for OIDC login (Authorization Code + PKCE).
+- **Proxy → AnythingLLM Admin API** to issue SSO tokens.
+- **Redirect chain**:
+  1) `/login` → Keycloak auth
+  2) `/auth/callback` → Proxy exchanges code and issues AnythingLLM token
+  3) Proxy redirects to `/agreement` (if enabled), then to `/sso/simple?token=...`
+  4) AnythingLLM sets session and loads UI
+- **Logged out**: AnythingLLM should redirect to **proxy** `/logged-out`, not `/login`.
+
+## How the Deployment Works (Runtime Overview)
+- **Ingress** should route the public host to the **proxy** service.
+- **AnythingLLM ingress** is optional and should be removed after setup.
+- **Weaviate** runs as StatefulSet and must have persistent storage.
+- **Secrets/ConfigMaps** set runtime env; do not duplicate envs in multiple places.
+
 ## Safety & Process
 - **Ask before making changes** (deployments, secrets, Helm upgrades, deletions).
 - **Read-only first**: gather evidence before proposing fixes.
@@ -73,8 +90,12 @@ kubectl exec -n <ns> <proxy-pod> -- curl -sS https://<keycloak-host>/realms/<rea
 
 ## 8) Common Failure Patterns
 ### Login Loop
-- `SIMPLE_SSO_NO_LOGIN_REDIRECT` must be **/logged-out**
-- Ingress must route the host to **proxy**, not AnythingLLM
+- When the user says **“routing is in a loop”**, check these first:
+  - `SIMPLE_SSO_NO_LOGIN_REDIRECT` must be **/logged-out** (proxy route).
+  - Ingress **host** must route to **proxy**, not AnythingLLM.
+  - AnythingLLM ingress should be **disabled or removed**.
+  - Proxy should set `force re-auth` cookie on `/logged-out` (debug by checking `/debug` if enabled).
+  - Confirm `/healthz` is served by proxy and `/logged-out` returns proxy page (not AnythingLLM 404).
 
 ### Kyverno Admission Denied
 - Missing resource limits
