@@ -32,6 +32,14 @@ anythingllm:
     pullPolicy: IfNotPresent
   imagePullSecrets:
     - harbor-pull-secret
+  ingress:
+    enabled: true
+    className: posaidon-nginx
+    hosts:
+      - host: anythingllm.mapache-test.mapache.io
+        paths:
+          - path: /
+            pathType: Prefix
   env:
     SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://mapache-test.mapache.io/logged-out"
   persistence:

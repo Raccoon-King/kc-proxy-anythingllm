@@ -15,6 +15,18 @@ service:
   type: ClusterIP
   port: 3001
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  nameOverride: ""
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 resources:
   requests:
     cpu: 250m

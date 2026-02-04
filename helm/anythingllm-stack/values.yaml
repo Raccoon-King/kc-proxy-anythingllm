@@ -78,6 +78,18 @@ anythingllm:
 
   replicaCount: 1
 
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    nameOverride: ""
+    hosts:
+      - host: ""
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
   # Init container waits for Weaviate to be ready
   initContainers:
     waitForWeaviate:
