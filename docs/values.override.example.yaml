@@ -4,7 +4,7 @@ proxy:
     enabled: true
     className: posaidon-nginx
     hosts:
-      - host: oscar-test.i2cv.io
+      - host: mapache-test.mapache.io
         paths:
           - path: /
             pathType: Prefix
@@ -12,14 +12,14 @@ proxy:
     KEYCLOAK_ISSUER_URL: "https://keycloak.example.com/realms/posaidon"
     KEYCLOAK_EXTERNAL_URL: "https://keycloak.example.com/realms/posaidon"
     KEYCLOAK_CLIENT_ID: "posaidon-proxy"
-    KEYCLOAK_REDIRECT_URL: "https://oscar-test.i2cv.io/auth/callback"
+    KEYCLOAK_REDIRECT_URL: "https://mapache-test.mapache.io/auth/callback"
   secretEnv:
     KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"
     SESSION_SECRET: "REPLACE_ME"
 
 anythingllm:
   env:
-    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://oscar-test.i2cv.io/logged-out"
+    SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://mapache-test.mapache.io/logged-out"
   persistence:
     storageClass: posaidon-ebs-sc
 
@@ -27,3 +27,4 @@ weaviate:
   weaviate:
     persistence:
       storageClass: posaidon-ebs-sc
+
