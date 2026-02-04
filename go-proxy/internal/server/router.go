@@ -289,9 +289,13 @@ func NewRouter(d Dependencies) http.Handler {
 		delete(sess.Values, "agreement_next")
 
 		_ = d.Sessions.Save(r, w, sess)
+		clearForceReauthCookie(w)
 		clearRedirectGuardCookie(w)
 		email, _ := sess.Values["email"].(string)
 		userLog(r, "AGREEMENT_ACCEPTED", email)
+		if strings.HasPrefix(next, "/logged-out") {
+			next = "/"
+		}
 		secLog("agreement accepted; redirecting to %s", next)
 		http.Redirect(w, r, next, http.StatusFound)
 	})
