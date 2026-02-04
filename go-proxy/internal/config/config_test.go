@@ -42,13 +42,20 @@ func TestDeriveExternalIssuerDefaultsForInternalHost(t *testing.T) {
 
 func TestValidateProductionChecks(t *testing.T) {
 	cfg := Config{
-		Port:                "8080",
-		Environment:         "production",
-		KeycloakExternalURL: "https://kc.example.com/realms/app",
-		CallbackPath:        "/auth/callback",
-		SessionMaxAgeDays:   7,
-		SessionSecure:       true,
-		MaxHeaderBytes:      1 << 20,
+		Port:                 "8080",
+		Environment:          "production",
+		AnythingLLMBaseURL:   "http://anythingllm:3001",
+		AnythingLLMAPIKey:    "key",
+		KeycloakIssuerURL:    "https://kc.example.com/realms/app",
+		KeycloakExternalURL:  "https://kc.example.com/realms/app",
+		KeycloakClientID:     "client",
+		KeycloakClientSecret: "secret",
+		KeycloakRedirectURL:  "https://proxy.example.com/auth/callback",
+		SessionSecret:        []byte("secret-secret-secret"),
+		CallbackPath:         "/auth/callback",
+		SessionMaxAgeDays:    7,
+		SessionSecure:        true,
+		MaxHeaderBytes:       1 << 20,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got %v", err)

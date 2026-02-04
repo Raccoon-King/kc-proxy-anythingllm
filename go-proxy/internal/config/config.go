@@ -93,10 +93,13 @@ func getenv(key, def string) string {
 	return def
 }
 
-func mustEnv(key string) string {
+func mustEnv(key, hint string) string {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
-		log.Fatalf("missing required env %s", key)
+		if hint != "" {
+			hint = " " + hint
+		}
+		log.Fatalf("missing required env %s%s", key, hint)
 	}
 	return v
 }
@@ -144,8 +147,8 @@ func parseCSV(s string) []string {
 
 // Load reads environment variables into Config with defaults where possible.
 func Load() Config {
-	sessionSecret := mustEnv("SESSION_SECRET")
-	issuerURL := mustEnv("KEYCLOAK_ISSUER_URL")
+	sessionSecret := mustEnv("SESSION_SECRET", "(set to a long random string)")
+	issuerURL := mustEnv("KEYCLOAK_ISSUER_URL", "(expected format: https://keycloak.example.com/realms/<realm>)")
 	externalURL := getenv("KEYCLOAK_EXTERNAL_URL", "")
 	if externalURL == "" {
 		externalURL = deriveExternalIssuer(issuerURL)
@@ -154,14 +157,14 @@ func Load() Config {
 		Port:                      getenv("PORT", "8080"),
 		Environment:               getenv("APP_ENV", "development"),
 		AnythingLLMBaseURL:        getenv("ANYLLM_URL", "http://anythingllm:3001"),
-		AnythingLLMAPIKey:         mustEnv("ANYLLM_API_KEY"),
+		AnythingLLMAPIKey:         mustEnv("ANYLLM_API_KEY", "(create in AnythingLLM admin)"),
 		AnythingLLMTimeout:        envDuration("ANYLLM_HTTP_TIMEOUT", "10s"),
 		AnythingLLMRetryMax:       envInt("ANYLLM_RETRY_MAX", 0),
 		AnythingLLMRetryBackoff:   envDuration("ANYLLM_RETRY_BACKOFF", "200ms"),
 		KeycloakIssuerURL:         issuerURL,
 		KeycloakExternalURL:       externalURL,
-		KeycloakClientID:          mustEnv("KEYCLOAK_CLIENT_ID"),
-		KeycloakClientSecret:      mustEnv("KEYCLOAK_CLIENT_SECRET"),
+		KeycloakClientID:          mustEnv("KEYCLOAK_CLIENT_ID", "(OIDC client ID)"),
+		KeycloakClientSecret:      mustEnv("KEYCLOAK_CLIENT_SECRET", "(OIDC client secret)"),
 		KeycloakRedirectURL:       getenv("KEYCLOAK_REDIRECT_URL", "http://localhost:8080/auth/callback"),
 		SessionSecret:             []byte(sessionSecret),
 		SessionSecure:             getenv("SESSION_SECURE", "false") == "true",
@@ -285,6 +288,33 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Port) == "" {
 		return fmt.Errorf("PORT must not be empty")
 	}
+	if strings.TrimSpace(string(c.SessionSecret)) == "" {
+		return fmt.Errorf("SESSION_SECRET must not be empty")
+	}
+	if err := validateURL("ANYLLM_URL", c.AnythingLLMBaseURL, true, false); err != nil {
+		return err
+	}
+	if strings.TrimSpace(c.AnythingLLMAPIKey) == "" {
+		return fmt.Errorf("ANYLLM_API_KEY must not be empty")
+	}
+	if err := validateURL("KEYCLOAK_ISSUER_URL", c.KeycloakIssuerURL, true, true); err != nil {
+		return err
+	}
+	if !strings.Contains(c.KeycloakIssuerURL, "/realms/") {
+		return fmt.Errorf("KEYCLOAK_ISSUER_URL must include /realms/<realm>")
+	}
+	if err := validateURL("KEYCLOAK_EXTERNAL_URL", c.KeycloakExternalURL, true, true); err != nil {
+		return err
+	}
+	if strings.TrimSpace(c.KeycloakClientID) == "" {
+		return fmt.Errorf("KEYCLOAK_CLIENT_ID must not be empty")
+	}
+	if strings.TrimSpace(c.KeycloakClientSecret) == "" {
+		return fmt.Errorf("KEYCLOAK_CLIENT_SECRET must not be empty")
+	}
+	if err := validateURL("KEYCLOAK_REDIRECT_URL", c.KeycloakRedirectURL, true, false); err != nil {
+		return err
+	}
 	if !strings.HasPrefix(c.CallbackPath, "/") {
 		return fmt.Errorf("CALLBACK_PATH must start with /")
 	}
@@ -310,6 +340,27 @@ func (c Config) Validate() error {
 		if strings.HasPrefix(strings.ToLower(c.KeycloakExternalURL), "http://") {
 			return fmt.Errorf("KEYCLOAK_EXTERNAL_URL must be https in production")
 		}
+	}
+	return nil
+}
+
+func validateURL(name, raw string, requireScheme, requireHost bool) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("%s must not be empty", name)
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s must be a valid URL: %v", name, err)
+	}
+	if requireScheme && parsed.Scheme == "" {
+		return fmt.Errorf("%s must include a scheme (http or https)", name)
+	}
+	if requireScheme && parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s must use http or https", name)
+	}
+	if requireHost && parsed.Host == "" {
+		return fmt.Errorf("%s must include a host", name)
 	}
 	return nil
 }

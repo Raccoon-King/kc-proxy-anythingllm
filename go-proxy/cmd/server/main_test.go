@@ -18,10 +18,12 @@ func baseTestConfig() config.Config {
 		Port:                 "8080",
 		AnythingLLMBaseURL:   "http://anythingllm:3001",
 		AnythingLLMAPIKey:    "key",
-		KeycloakIssuerURL:    "https://issuer",
+		KeycloakIssuerURL:    "https://issuer/realms/test",
+		KeycloakExternalURL:  "https://issuer/realms/test",
 		KeycloakClientID:     "client",
 		KeycloakClientSecret: "secret",
-		SessionSecret:        []byte("abc"),
+		KeycloakRedirectURL:  "https://proxy.example.com/auth/callback",
+		SessionSecret:        []byte("secret-secret-secret"),
 		CallbackPath:         "/auth/callback",
 		SessionSameSite:      "lax",
 		SessionMaxAgeDays:    7,
@@ -38,7 +40,7 @@ func baseTestConfig() config.Config {
 func TestMainExitsWhenSkipListen(t *testing.T) {
 	os.Setenv("SESSION_SECRET", "abc")
 	os.Setenv("ANYLLM_API_KEY", "key")
-	os.Setenv("KEYCLOAK_ISSUER_URL", "https://issuer")
+	os.Setenv("KEYCLOAK_ISSUER_URL", "https://issuer/realms/test")
 	os.Setenv("KEYCLOAK_CLIENT_ID", "client")
 	os.Setenv("KEYCLOAK_CLIENT_SECRET", "secret")
 	os.Setenv("SKIP_LISTEN", "true")
@@ -119,7 +121,7 @@ func TestRunReturnsServeError(t *testing.T) {
 func TestMainTriggersFatalOnRunError(t *testing.T) {
 	os.Setenv("SESSION_SECRET", "abc")
 	os.Setenv("ANYLLM_API_KEY", "key")
-	os.Setenv("KEYCLOAK_ISSUER_URL", "https://issuer")
+	os.Setenv("KEYCLOAK_ISSUER_URL", "https://issuer/realms/test")
 	os.Setenv("KEYCLOAK_CLIENT_ID", "client")
 	os.Setenv("KEYCLOAK_CLIENT_SECRET", "secret")
 	os.Setenv("SKIP_LISTEN", "false")

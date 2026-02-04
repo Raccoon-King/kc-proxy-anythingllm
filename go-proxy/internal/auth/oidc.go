@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -30,7 +31,12 @@ func NewOIDC(ctx context.Context, issuer, clientID, clientSecret, redirectURL st
 	ctx = oidc.InsecureIssuerURLContext(ctx, issuer)
 	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
-		return nil, err
+		lower := strings.ToLower(err.Error())
+		hint := ""
+		if strings.Contains(lower, "resource not found") || strings.Contains(lower, "404") {
+			hint = " (check KEYCLOAK_ISSUER_URL includes /realms/<realm> and is reachable)"
+		}
+		return nil, fmt.Errorf("oidc discovery failed for issuer %q: %w%s", issuer, err, hint)
 	}
 
 	oidcConfig := &oidc.Config{
