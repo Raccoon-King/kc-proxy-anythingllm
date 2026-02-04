@@ -323,6 +323,14 @@ func NewRouter(d Dependencies) http.Handler {
 		_, _ = w.Write([]byte(body))
 	})
 
+	// Relogin endpoint - clears cookies and forces new login
+	mux.HandleFunc("/relogin", func(w http.ResponseWriter, r *http.Request) {
+		_ = d.Sessions.Clear(r, w)
+		clearForceReauthCookie(w)
+		clearRedirectGuardCookie(w)
+		http.Redirect(w, r, "/login", http.StatusFound)
+	})
+
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		sess, _ := d.Sessions.Get(r)
@@ -1141,7 +1149,7 @@ func renderLoggedOutPage(cfg config.Config) string {
   <div class="proxy-agreement-card">
     <h1>%s</h1>
     <p>%s</p>
-    <a href="/login">%s</a>
+    <a href="/relogin">%s</a>
   </div>
 </div>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
 	return injectBanners(agreementHTML(body), cfg)
