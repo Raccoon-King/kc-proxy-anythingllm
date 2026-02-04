@@ -1,5 +1,10 @@
 # Example override values for posaidon/prod
 proxy:
+  image:
+    registry: harbor.localhost
+    repository: mapache/keycloak-proxy-go
+    tag: latest
+    pullPolicy: IfNotPresent
   ingress:
     enabled: true
     className: posaidon-nginx
@@ -18,6 +23,11 @@ proxy:
     SESSION_SECRET: "REPLACE_ME"
 
 anythingllm:
+  image:
+    registry: harbor.localhost
+    repository: mapache/anythingllm
+    tag: latest
+    pullPolicy: IfNotPresent
   env:
     SIMPLE_SSO_NO_LOGIN_REDIRECT: "https://mapache-test.mapache.io/logged-out"
   persistence:
@@ -25,6 +35,18 @@ anythingllm:
 
 weaviate:
   weaviate:
+    image:
+      registry: harbor.localhost
+      repo: posaidon/weaviate
+      tag: "1.34.0"
+      pullPolicy: IfNotPresent
+    initContainers:
+      sysctlInitContainer:
+        image:
+          registry: harbor.localhost
+          repo: posaidon/alpine
+          tag: latest
+          pullPolicy: IfNotPresent
     persistence:
       storageClass: posaidon-ebs-sc
 
