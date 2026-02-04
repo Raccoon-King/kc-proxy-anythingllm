@@ -23,6 +23,8 @@ proxy:
     SESSION_SECURE: "false"
     SESSION_SAMESITE: "lax"
     DEBUG_LOGGING: "true"
+    SECURITY_LOGGING: "true"
+    ACCESS_LOGGING: "true"
   secretEnv:
     ANYLLM_API_KEY: "REPLACE_ME"
     KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"

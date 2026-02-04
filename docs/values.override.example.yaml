@@ -20,6 +20,12 @@ proxy:
     KEYCLOAK_EXTERNAL_URL: "https://keycloak.example.com/realms/posaidon"
     KEYCLOAK_CLIENT_ID: "posaidon-proxy"
     KEYCLOAK_REDIRECT_URL: "https://mapache-test.mapache.io/auth/callback"
+    DEBUG_LOGGING: "true"
+    SECURITY_LOGGING: "true"
+    ACCESS_LOGGING: "true"
+    SESSION_SECURE: "true"
+    SESSION_SAMESITE: "lax"
+    SESSION_MAX_AGE_DAYS: "7"
   secretEnv:
     ANYLLM_API_KEY: "REPLACE_ME"
     KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"
