@@ -334,7 +334,7 @@ func TestKeycloakLogoutURLUsesExternal(t *testing.T) {
 		KeycloakRedirectURL: "http://localhost:8080/auth/callback",
 		Port:                "8080",
 	}
-	url := keycloakLogoutURL(cfg)
+	url := keycloakLogoutURLWithHint(cfg, "token")
 	if !strings.HasPrefix(url, "http://localhost:8180/realms/mapache/protocol/openid-connect/logout") {
 		t.Fatalf("unexpected base in logout url: %s", url)
 	}

@@ -80,8 +80,8 @@ func TestSSOMissingTokenRedirectsToKeycloakLogout(t *testing.T) {
 		t.Fatalf("expected redirect, got %d", rr.Code)
 	}
 	loc := rr.Header().Get("Location")
-	if !strings.Contains(loc, "/protocol/openid-connect/logout") {
-		t.Fatalf("expected keycloak logout redirect, got %s", loc)
+	if loc != "/logged-out" {
+		t.Fatalf("expected logged-out redirect, got %s", loc)
 	}
 }
 

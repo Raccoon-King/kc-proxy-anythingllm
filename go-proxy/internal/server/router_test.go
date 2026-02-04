@@ -169,8 +169,8 @@ func TestCallbackStateMismatch(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Fatalf("expected redirect on state mismatch, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Header().Get("Location"), "/protocol/openid-connect/logout") {
-		t.Fatalf("expected logout redirect, got %s", rr.Header().Get("Location"))
+	if rr.Header().Get("Location") != "/logged-out" {
+		t.Fatalf("expected logged-out redirect, got %s", rr.Header().Get("Location"))
 	}
 }
 
