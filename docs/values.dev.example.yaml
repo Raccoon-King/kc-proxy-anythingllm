@@ -1,0 +1,32 @@
+# Example override values for dev
+proxy:
+  ingress:
+    enabled: true
+    className: posaidon-nginx
+    hosts:
+      - host: dev.mapache.local
+        paths:
+          - path: /
+            pathType: Prefix
+  env:
+    KEYCLOAK_ISSUER_URL: "http://keycloak.localhost/realms/posaidon"
+    KEYCLOAK_EXTERNAL_URL: "http://keycloak.localhost/realms/posaidon"
+    KEYCLOAK_CLIENT_ID: "posaidon-proxy"
+    KEYCLOAK_REDIRECT_URL: "http://dev.mapache.local/auth/callback"
+    SESSION_SECURE: "false"
+    SESSION_SAMESITE: "lax"
+    DEBUG_LOGGING: "true"
+  secretEnv:
+    KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"
+    SESSION_SECRET: "REPLACE_ME"
+
+anythingllm:
+  env:
+    SIMPLE_SSO_NO_LOGIN_REDIRECT: "http://dev.mapache.local/logged-out"
+  persistence:
+    storageClass: posaidon-ebs-sc
+
+weaviate:
+  weaviate:
+    persistence:
+      storageClass: posaidon-ebs-sc

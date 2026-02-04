@@ -117,6 +117,7 @@ weaviate:
 ```
 
 See `docs/values.override.example.yaml` for a complete prod-style example.
+See `docs/values.dev.example.yaml` for a dev-style example.
 
 Note: chart `values.yaml` no longer carries application env defaults. Supply them via your override file or env/configmaps.
 
