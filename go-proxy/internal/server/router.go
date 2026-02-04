@@ -1149,9 +1149,18 @@ func renderLoggedOutPage(cfg config.Config) string {
   <div class="proxy-agreement-card">
     <h1>%s</h1>
     <p>%s</p>
-    <a href="/relogin">%s</a>
+    <a href="/relogin" id="proxy-relogin-link">%s</a>
   </div>
-</div>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
+</div>
+<script>
+(function() {
+  var link = document.getElementById('proxy-relogin-link');
+  if (!link) return;
+  link.addEventListener('click', function() {
+    window.location.href = '/relogin';
+  });
+})();
+</script>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
 	return injectBanners(agreementHTML(body), cfg)
 }
 
