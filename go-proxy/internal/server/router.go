@@ -691,6 +691,18 @@ func newReverseProxy(cfg config.Config) *httputil.ReverseProxy {
 			path = resp.Request.URL.Path
 		}
 
+		// If upstream redirects to logged-out, force a fresh login instead.
+		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+			if loc := resp.Header.Get("Location"); strings.Contains(strings.ToLower(loc), "/logged-out") {
+				expireProxyCookie(resp)
+				setForceReauthHeader(resp)
+				resp.Header.Set("Location", "/login")
+				resp.Body = io.NopCloser(bytes.NewBuffer(nil))
+				resp.Header.Set("Content-Length", "0")
+				return nil
+			}
+		}
+
 		// If AnythingLLM returns auth failure or redirects to its own login, force a fresh SSO cycle.
 		if !(strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/sso/")) &&
 			(resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || isLoginRedirect(resp)) {
