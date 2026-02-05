@@ -520,13 +520,11 @@ func NewRouter(d Dependencies) http.Handler {
 		sess, _ := d.Sessions.Get(r)
 		email, _ := sess.Values["email"].(string)
 		sessionID, _ := sess.Values["session_id"].(string)
-		idToken := getIDToken(sess, idTokenCache)
-		clearIDTokenCache(sess, idTokenCache)
 		sessionTracker.Remove(email, sessionID)
 		_ = d.Sessions.Clear(r, w)
 		userLog(r, "LOGOUT", email)
 		secLog("logout local session cleared")
-		http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
+		http.Redirect(w, r, "/agreement", http.StatusFound)
 	})
 
 	// Main catch-all route - requires agreement + auth
@@ -539,13 +537,11 @@ func NewRouter(d Dependencies) http.Handler {
 			if isLogoutPath(path) {
 				email, _ := sess.Values["email"].(string)
 				sessionID, _ := sess.Values["session_id"].(string)
-				idToken := getIDToken(sess, idTokenCache)
-				clearIDTokenCache(sess, idTokenCache)
 				sessionTracker.Remove(email, sessionID)
 				_ = d.Sessions.Clear(r, w)
 				userLog(r, "LOGOUT", email, fmt.Sprintf("path=%s", r.URL.Path))
 				secLog("logout requested; local session cleared path=%s", r.URL.Path)
-				http.Redirect(w, r, keycloakLogoutURLWithHint(d.Cfg, idToken), http.StatusFound)
+				http.Redirect(w, r, "/agreement", http.StatusFound)
 				return
 			}
 		}
