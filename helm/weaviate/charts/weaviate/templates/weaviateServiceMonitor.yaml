@@ -2,17 +2,17 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: weaviate
+  name: {{ include "weaviate.fullname" . }}
   labels:
-    name: weaviate
-    app: weaviate
-    app.kubernetes.io/name: weaviate
+    name: {{ include "weaviate.fullname" . }}
+    app: {{ include "weaviate.fullname" . }}
+    app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  jobLabel: weaviate
+  jobLabel: {{ include "weaviate.fullname" . }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: weaviate
+      app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
       app.kubernetes.io/managed-by: {{ .Release.Service }}
       monitoring: enabled
   namespaceSelector:

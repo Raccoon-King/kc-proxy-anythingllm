@@ -13,6 +13,14 @@ image:
   pullPolicy: IfNotPresent
   pullSecrets: []
 
+# Optional overrides for naming.
+nameOverride: ""
+fullnameOverride: ""
+
+# Control creation of the cluster API basic auth secret.
+clusterApiSecret:
+  create: true
+
 # overwrite command and args if you want to run specific startup scripts, for
 # example setting the nofile limit
 command: ["/bin/weaviate"]

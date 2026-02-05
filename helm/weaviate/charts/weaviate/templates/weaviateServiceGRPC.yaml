@@ -4,7 +4,7 @@ kind: Service
 metadata:
   name: {{ .Values.grpcService.name }}
   labels:
-    app.kubernetes.io/name: weaviate
+    app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
   {{- with .Values.grpcService.annotations }}
   annotations: {{ toYaml . | nindent 4 }}
@@ -12,7 +12,7 @@ metadata:
 spec:
   type: {{ .Values.grpcService.type }}
   selector:
-    app: weaviate
+    app: {{ include "weaviate.fullname" . }}
   ports:
     {{- range .Values.grpcService.ports }}
     - {{ toYaml . | indent 6 | trim }}

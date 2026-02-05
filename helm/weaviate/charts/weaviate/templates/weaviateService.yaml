@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: {{ .Values.service.name }}
   labels:
-    app.kubernetes.io/name: weaviate
+    app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if and .Values.env.PROMETHEUS_MONITORING_ENABLED .Values.serviceMonitor.enabled }}
     monitoring: enabled
@@ -14,7 +14,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   selector:
-    app: weaviate
+    app: {{ include "weaviate.fullname" . }}
   ports:
     {{- range .Values.service.ports }}
     - {{ toYaml . | indent 6 | trim }}

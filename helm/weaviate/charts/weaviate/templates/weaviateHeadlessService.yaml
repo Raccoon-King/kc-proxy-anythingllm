@@ -3,13 +3,13 @@ kind: Service
 metadata:
   name: {{ .Values.service.name }}-headless
   labels:
-    app.kubernetes.io/name: weaviate
+    app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   type: ClusterIP
   clusterIP: None
   selector:
-    app: weaviate
+    app: {{ include "weaviate.fullname" . }}
   ports:
     - protocol: TCP
       port: 80

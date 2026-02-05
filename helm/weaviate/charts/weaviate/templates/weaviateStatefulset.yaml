@@ -1,11 +1,11 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: weaviate
+  name: {{ include "weaviate.fullname" . }}
   labels:
-    name: weaviate
-    app: weaviate
-    app.kubernetes.io/name: weaviate
+    name: {{ include "weaviate.fullname" . }}
+    app: {{ include "weaviate.fullname" . }}
+    app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   replicas: {{ .Values.replicas }}
@@ -15,12 +15,12 @@ spec:
   serviceName: {{ .Values.service.name }}-headless
   selector:
     matchLabels:
-      app: weaviate
+      app: {{ include "weaviate.fullname" . }}
   template:
     metadata:
       labels:
-        app: weaviate
-        app.kubernetes.io/name: weaviate
+        app: {{ include "weaviate.fullname" . }}
+        app.kubernetes.io/name: {{ include "weaviate.fullname" . }}
         app.kubernetes.io/managed-by: {{ .Release.Service }}
       annotations:
         # To restart Pods if the ConfigMap is updated.
@@ -105,12 +105,12 @@ spec:
           - name: CLUSTER_BASIC_AUTH_USERNAME
             valueFrom:
               secretKeyRef:
-                name: weaviate-cluster-api-basic-auth
+                name: {{ include "weaviate.fullname" . }}-cluster-api-basic-auth
                 key: username
           - name: CLUSTER_BASIC_AUTH_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: weaviate-cluster-api-basic-auth
+                name: {{ include "weaviate.fullname" . }}-cluster-api-basic-auth
                 key: password
           - name: PERSISTENCE_DATA_PATH
             value: '/var/lib/weaviate'
@@ -500,7 +500,7 @@ spec:
             protocol: TCP
           {{- end }}
         volumeMounts:
-          - name: weaviate-config
+          - name: {{ include "weaviate.fullname" . }}-config
             mountPath: /weaviate-config
           - name: {{ .Values.storage.name }}
             mountPath: /var/lib/weaviate
@@ -560,9 +560,9 @@ spec:
           configMap:
             name: weaviate-runtime-overrides
         {{- end }}
-        - name: weaviate-config
+        - name: {{ include "weaviate.fullname" . }}-config
           configMap:
-            {{ if .Values.custom_config_map.enabled }}name: {{ .Values.custom_config_map.name }} {{ else }}name: weaviate-config{{ end }}
+            {{ if .Values.custom_config_map.enabled }}name: {{ .Values.custom_config_map.name }} {{ else }}name: {{ include "weaviate.fullname" . }}-config{{ end }}
         {{- if index .Values "backups" "gcs" "enabled" }}
           {{- if and (index .Values "backups" "gcs" "secrets") (index .Values "backups" "gcs" "secrets" "GOOGLE_APPLICATION_CREDENTIALS") }}
 
