@@ -1,10 +1,6 @@
 proxy:
   fullnameOverride: anythingllm-stack-proxy
   existingSecret: anythingllm-proxy
-  image:
-    registry: harbor.localhost
-    repository: mapache/keycloak-proxy-go
-    tag: latest
   imagePullSecrets:
     - harbor-pull-secret
   ingress:
@@ -59,26 +55,12 @@ proxy:
 anythingllm:
   fullnameOverride: anythingllm-stack-anythingllm
   existingSecret: anythingllm
-  image:
-    registry: harbor.localhost
-    repository: mapache/anythingllm
-    tag: latest
   imagePullSecrets:
     - harbor-pull-secret
   ingress:
-    enabled: true
-    className: nginx
-    annotations: {}
-    hosts:
-      - host: anythingllm.localhost
-        paths:
-          - path: /
-            pathType: Prefix
-    tls: []
-  extraSecretRefs:
-    - anythingllm-api-key
+    enabled: false
   persistence:
-    storageClass: local-path
+    storageClass: posaidon-ebs-sc
   env:
     SIMPLE_SSO_NO_LOGIN_REDIRECT: http://proxy.localhost/logged-out
     WEAVIATE_ENDPOINT: http://anythingllm-stack-weaviate:80
@@ -96,15 +78,13 @@ weaviate:
     clusterApiSecret:
       create: true
     persistence:
-      storageClass: local-path
+      storageClass: posaidon-ebs-sc
     image:
-      registry: cr.weaviate.io
-      repo: semitechnologies/weaviate
+      registry: harbor.localhost
+      repo: posaidon/weaviate
       tag: 1.34.0
-      pullSecrets: []
-    env:
-      RAFT_JOIN: "anythingllm-stack-weaviate-0"
-      RAFT_BOOTSTRAP_EXPECT: "1"
+      pullSecrets:
+        - harbor-pull-secret
     initContainers:
       sysctlInitContainer:
         image:

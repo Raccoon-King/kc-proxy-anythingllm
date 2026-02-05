@@ -102,11 +102,7 @@ spec:
             - secretRef:
                 name: {{ include "anythingllm.fullname" . }}
             {{- end }}
-            {{- range .Values.extraSecretRefs }}
-            - secretRef:
-                name: {{ . }}
-            {{- end }}
-            {{- end }}
+          {{- end }}
           env:
             {{- if not (or .Values.configMap.create .Values.configMap.name) }}
             {{- range $key, $val := .Values.env }}

@@ -15,8 +15,6 @@ service:
   type: ClusterIP
   port: 3001
 
-extraSecretRefs: []
-
 ingress:
   enabled: false
   className: ""
