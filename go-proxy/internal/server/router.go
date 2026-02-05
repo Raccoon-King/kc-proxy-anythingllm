@@ -37,6 +37,7 @@ const (
 	ctxKeyCorrelationID     ctxKey = "correlation_id"
 	redirectGuardCookieName        = "proxy_redirect_guard"
 	forceReauthCookieName          = "proxy_force_reauth"
+	skipLogoutHintCookieName       = "proxy_skip_logout_hint"
 	redirectGuardMax               = 6
 )
 
@@ -329,6 +330,11 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Login - requires agreement first, then initiates Keycloak auth
 	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		if cameFromLoggedOut(r) {
+			setSkipLogoutHintCookie(w)
+		} else {
+			clearSkipLogoutHintCookie(w)
+		}
 		sess, _ := d.Sessions.Get(r)
 		if hasCookie(r, forceReauthCookieName) {
 			_ = d.Sessions.Clear(r, w)
@@ -517,6 +523,14 @@ func NewRouter(d Dependencies) http.Handler {
 
 	// Logout
 	mux.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		if hasCookie(r, skipLogoutHintCookieName) || cameFromLoggedOut(r) {
+			clearSkipLogoutHintCookie(w)
+			_ = d.Sessions.Clear(r, w)
+			clearForceReauthCookie(w)
+			clearRedirectGuardCookie(w)
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
 		sess, _ := d.Sessions.Get(r)
 		email, _ := sess.Values["email"].(string)
 		sessionID, _ := sess.Values["session_id"].(string)
@@ -537,6 +551,14 @@ func NewRouter(d Dependencies) http.Handler {
 		// Handle logout paths early to avoid hanging on downstream redirects.
 		if strings.Contains(path, "logout") {
 			if isLogoutPath(path) {
+				if hasCookie(r, skipLogoutHintCookieName) || cameFromLoggedOut(r) {
+					clearSkipLogoutHintCookie(w)
+					_ = d.Sessions.Clear(r, w)
+					clearForceReauthCookie(w)
+					clearRedirectGuardCookie(w)
+					http.Redirect(w, r, "/", http.StatusFound)
+					return
+				}
 				email, _ := sess.Values["email"].(string)
 				sessionID, _ := sess.Values["session_id"].(string)
 				idToken := getIDToken(sess, idTokenCache)
@@ -1037,6 +1059,49 @@ func setForceReauthHeader(resp *http.Response) {
 	resp.Header.Add("Set-Cookie", c)
 }
 
+func clearSkipLogoutHintCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     skipLogoutHintCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func setSkipLogoutHintCookie(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     skipLogoutHintCookieName,
+		Value:    "1",
+		Path:     "/",
+		MaxAge:   300,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func cameFromLoggedOut(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if strings.EqualFold(r.URL.Query().Get("from"), "logged-out") {
+		return true
+	}
+	ref := r.Referer()
+	if ref == "" {
+		return false
+	}
+	u, err := url.Parse(ref)
+	if err != nil {
+		return strings.Contains(strings.ToLower(ref), "/logged-out")
+	}
+	return strings.Contains(strings.ToLower(u.Path), "/logged-out")
+}
+
 func shouldGuardRedirect(target string) bool {
 	return strings.HasPrefix(target, "/login") || strings.HasPrefix(target, "/agreement")
 }
@@ -1156,7 +1221,7 @@ func renderLoggedOutPage(cfg config.Config) string {
   <div class="proxy-agreement-card">
     <h1>%s</h1>
     <p>%s</p>
-    <a href="/login">%s</a>
+    <a href="/">%s</a>
   </div>
 </div>`, html.EscapeString(title), html.EscapeString(msg), html.EscapeString(linkText))
 	return injectBanners(agreementHTML(body), cfg)
