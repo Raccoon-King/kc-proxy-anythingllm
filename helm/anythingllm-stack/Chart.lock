@@ -7,6 +7,6 @@ dependencies:
   version: 0.1.0
 - name: weaviate
   repository: file://../weaviate
-  version: 0.1.0
-digest: sha256:548c8364615eedff288519559362edfe95bdd8d05d5b132e27cda9ec0434da6c
-generated: "2026-01-29T16:10:13.2540509-05:00"
+  version: 0.2.0
+digest: sha256:515b7003af0d78beb1f74fe080b563853cc3a3b240bac39a959698fae6a7072f
+generated: "2026-02-06T16:05:02.0979458-05:00"

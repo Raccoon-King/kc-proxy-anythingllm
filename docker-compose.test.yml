@@ -1,0 +1,101 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./test/e2e/keycloak/test-realm.json:/opt/keycloak/data/import/test-realm.json:ro
+    ports:
+      - "8180:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - e2e-test
+
+  anythingllm-mock:
+    image: mockserver/mockserver:5.15.0
+    environment:
+      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/expectations.json
+      MOCKSERVER_LOG_LEVEL: WARN
+    volumes:
+      - ./test/e2e/mocks/anythingllm.json:/config/expectations.json:ro
+    ports:
+      - "3001:1080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:1080/mockserver/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - e2e-test
+
+  proxy:
+    image: ${PROXY_IMAGE:-keycloak-proxy-go:test}
+    build:
+      context: ./go-proxy
+      dockerfile: Dockerfile
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      anythingllm-mock:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      ANYLLM_URL: http://anythingllm-mock:1080
+      ANYLLM_API_KEY: test-api-key
+      ANYLLM_AUTO_CREATE: "true"
+      ANYLLM_DEFAULT_ROLE: user
+      # Internal URL for proxy->Keycloak communication
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/test-realm
+      KEYCLOAK_CLIENT_ID: test-proxy-client
+      KEYCLOAK_CLIENT_SECRET: test-secret-12345
+      KEYCLOAK_REDIRECT_URL: http://localhost:8080/auth/callback
+      # External URL for browser redirects
+      KEYCLOAK_EXTERNAL_URL: http://localhost:8180/realms/test-realm
+      SESSION_SECRET: test-session-secret-minimum-32-characters-long
+      SESSION_SECURE: "false"
+      SESSION_SAMESITE: lax
+      SESSION_MAX_AGE_DAYS: "1"
+      SESSION_HTTP_ONLY: "true"
+      # Banner configuration
+      BANNER_TOP_TEXT: E2E TEST ENVIRONMENT
+      BANNER_BOTTOM_TEXT: E2E TEST ENVIRONMENT
+      BANNER_BG_COLOR: "#f6f000"
+      BANNER_TEXT_COLOR: "#000000"
+      # Agreement configuration
+      AGREEMENT_TITLE: Test Agreement
+      AGREEMENT_BODY: This is a test agreement. Click accept to continue.
+      AGREEMENT_BUTTON_TEXT: Accept
+      # Logging
+      DEBUG_LOGGING: "true"
+      SECURITY_LOGGING: "true"
+      ACCESS_LOGGING: "true"
+      # Disable readiness checks for mock
+      READINESS_CHECKS: "false"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz > /dev/null || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+    networks:
+      - e2e-test
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  e2e-test:
+    name: e2e-test-network

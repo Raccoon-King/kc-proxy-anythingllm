@@ -1,6 +1,6 @@
-{{- if not .Values.rollouts.enabled }}
-apiVersion: apps/v1
-kind: Deployment
+{{- if .Values.rollouts.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: {{ include "proxy.fullname" . }}
   labels:
@@ -133,5 +133,26 @@ spec:
       {{- with .Values.extraVolumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+  strategy:
+    canary:
+      {{- with .Values.rollouts.canarySteps }}
+      steps:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.rollouts.analysis.enabled }}
+      analysis:
+        templates:
+          - templateName: {{ include "proxy.fullname" . }}-analysis
+        startingStep: {{ .Values.rollouts.analysis.startingStep | default 1 }}
+        args:
+          - name: service-name
+            value: {{ include "proxy.fullname" . }}
+      {{- end }}
+      {{- if .Values.rollouts.maxSurge }}
+      maxSurge: {{ .Values.rollouts.maxSurge }}
+      {{- end }}
+      {{- if .Values.rollouts.maxUnavailable }}
+      maxUnavailable: {{ .Values.rollouts.maxUnavailable }}
       {{- end }}
 {{- end }}

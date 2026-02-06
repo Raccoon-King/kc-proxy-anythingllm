@@ -1,0 +1,65 @@
+{{- if and .Values.rollouts.enabled .Values.rollouts.analysis.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "proxy.fullname" . }}-analysis
+  labels:
+    {{- include "proxy.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: service-name
+  metrics:
+    # Health check - verifies /healthz returns healthy status
+    - name: health-check
+      interval: {{ .Values.rollouts.analysis.healthCheck.interval | default "30s" }}
+      count: {{ .Values.rollouts.analysis.healthCheck.count | default 5 }}
+      successCondition: result == "healthy"
+      failureLimit: {{ .Values.rollouts.analysis.healthCheck.failureLimit | default 2 }}
+      provider:
+        web:
+          url: http://{{`{{args.service-name}}`}}:{{ .Values.service.port }}/healthz
+          jsonPath: "{$.status}"
+          insecure: true
+
+    # Readiness check - verifies /readyz returns ok status
+    - name: readiness-check
+      interval: {{ .Values.rollouts.analysis.readinessCheck.interval | default "30s" }}
+      count: {{ .Values.rollouts.analysis.readinessCheck.count | default 5 }}
+      successCondition: result == "ok"
+      failureLimit: {{ .Values.rollouts.analysis.readinessCheck.failureLimit | default 2 }}
+      provider:
+        web:
+          url: http://{{`{{args.service-name}}`}}:{{ .Values.service.port }}/readyz
+          jsonPath: "{$.status}"
+          insecure: true
+
+    {{- if .Values.rollouts.analysis.errorRate.enabled }}
+    # Error rate analysis - requires Prometheus metrics
+    - name: error-rate
+      interval: {{ .Values.rollouts.analysis.errorRate.interval | default "60s" }}
+      count: {{ .Values.rollouts.analysis.errorRate.count | default 10 }}
+      successCondition: result[0] < {{ .Values.rollouts.analysis.errorRate.threshold | default 0.05 }}
+      failureLimit: {{ .Values.rollouts.analysis.errorRate.failureLimit | default 3 }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollouts.analysis.prometheus.address | default "http://prometheus:9090" }}
+          query: |
+            sum(rate(proxy_requests_errors_total{service="{{`{{args.service-name}}`}}"}[5m]))
+            /
+            sum(rate(proxy_requests_total{service="{{`{{args.service-name}}`}}"}[5m]))
+    {{- end }}
+
+    {{- if .Values.rollouts.analysis.latency.enabled }}
+    # Latency analysis - requires Prometheus metrics
+    - name: latency-p99
+      interval: {{ .Values.rollouts.analysis.latency.interval | default "60s" }}
+      count: {{ .Values.rollouts.analysis.latency.count | default 10 }}
+      successCondition: result[0] < {{ .Values.rollouts.analysis.latency.threshold | default 500 }}
+      failureLimit: {{ .Values.rollouts.analysis.latency.failureLimit | default 3 }}
+      provider:
+        prometheus:
+          address: {{ .Values.rollouts.analysis.prometheus.address | default "http://prometheus:9090" }}
+          query: |
+            histogram_quantile(0.99, sum(rate(proxy_request_duration_seconds_bucket{service="{{`{{args.service-name}}`}}"}[5m])) by (le)) * 1000
+    {{- end }}
+{{- end }}

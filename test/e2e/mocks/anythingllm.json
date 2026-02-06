@@ -1,0 +1,93 @@
+[
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/api/health"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"online\": true}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/api/v1/auth/simple-sso/link"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"enabled\": true}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/v1/auth/simple-sso/link"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"token\": \"test-sso-token-12345\", \"loginPath\": \"/login/path?token=test-sso-token-12345\"}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/api/admin/users"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"users\": []}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/api/admin/users/new"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["application/json"]
+      },
+      "body": "{\"user\": {\"id\": 1, \"username\": \"testuser\", \"role\": \"user\"}, \"error\": null}"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": ".*",
+      "path": "/login/path.*"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/html; charset=utf-8"]
+      },
+      "body": "<!DOCTYPE html><html><head><title>AnythingLLM</title></head><body><main>AnythingLLM Chat Interface</main></body></html>"
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "GET",
+      "path": "/"
+    },
+    "httpResponse": {
+      "statusCode": 200,
+      "headers": {
+        "Content-Type": ["text/html; charset=utf-8"]
+      },
+      "body": "<!DOCTYPE html><html><head><title>AnythingLLM</title></head><body><main>AnythingLLM Home</main></body></html>"
+    }
+  }
+]

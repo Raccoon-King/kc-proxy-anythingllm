@@ -156,3 +156,69 @@ readinessProbe:
   periodSeconds: 5
   timeoutSeconds: 2
   failureThreshold: 3
+
+# ===========================================
+# ARGO ROLLOUTS CONFIGURATION
+# ===========================================
+# When enabled, creates a Rollout instead of a Deployment
+# Requires Argo Rollouts controller installed in the cluster:
+#   kubectl create namespace argo-rollouts
+#   kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml
+rollouts:
+  enabled: false  # Backward compatible - disabled by default
+
+  # Maximum number of pods that can be created above replicas during update
+  maxSurge: 1
+  # Maximum number of pods that can be unavailable during update
+  maxUnavailable: 0
+
+  # Canary deployment steps
+  # Each step is executed in order, pausing between steps
+  canarySteps:
+    - setWeight: 10
+    - pause: {duration: 2m}
+    - setWeight: 25
+    - pause: {duration: 2m}
+    - setWeight: 50
+    - pause: {duration: 5m}
+    - setWeight: 75
+    - pause: {duration: 5m}
+    - setWeight: 100
+
+  # Analysis configuration for canary validation
+  # Analysis runs during canary deployment to validate health
+  analysis:
+    enabled: true
+    startingStep: 1  # Start analysis after first canary step
+
+    # Health check configuration
+    healthCheck:
+      interval: 30s
+      count: 5
+      failureLimit: 2
+
+    # Readiness check configuration
+    readinessCheck:
+      interval: 30s
+      count: 5
+      failureLimit: 2
+
+    # Error rate analysis (requires Prometheus metrics)
+    errorRate:
+      enabled: false
+      interval: 60s
+      count: 10
+      threshold: 0.05  # 5% error rate threshold
+      failureLimit: 3
+
+    # Latency analysis (requires Prometheus metrics)
+    latency:
+      enabled: false
+      interval: 60s
+      count: 10
+      threshold: 500  # 500ms p99 latency threshold
+      failureLimit: 3
+
+    # Prometheus address for metrics queries
+    prometheus:
+      address: http://prometheus:9090

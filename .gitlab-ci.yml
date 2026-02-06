@@ -120,6 +120,61 @@ node_test:
     - npm test --if-present
   needs: ["ai-policy-gate"]
 
+go_integration_test:
+  stage: test
+  <<: *docker_template
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_RYUK_DISABLED: "true"
+  before_script:
+    - apk add --no-cache go
+  script:
+    - cd go-proxy
+    - go test -tags=integration -v -timeout 15m ./...
+  needs: ["go_test"]
+  allow_failure: true
+  rules:
+    - exists:
+        - go-proxy/go.mod
+
+e2e_playwright:
+  stage: test
+  <<: *docker_template
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    # Build the proxy image first
+    - docker build -t keycloak-proxy-go:test go-proxy/
+    # Start test stack
+    - docker compose -f docker-compose.test.yml up -d --wait --wait-timeout 180
+    # Run Playwright tests in container
+    - |
+      docker run --rm --network=host \
+        -v $(pwd)/test/e2e:/app \
+        -w /app \
+        -e PROXY_URL=http://localhost:8080 \
+        -e KEYCLOAK_URL=http://localhost:8180 \
+        -e CI=true \
+        mcr.microsoft.com/playwright:v1.42.0-jammy \
+        sh -c "npm ci && npx playwright test"
+  after_script:
+    - docker compose -f docker-compose.test.yml logs proxy > proxy.log 2>&1 || true
+    - docker compose -f docker-compose.test.yml down -v || true
+  artifacts:
+    when: always
+    paths:
+      - test/e2e/playwright-report/
+      - test/e2e/test-results/
+      - proxy.log
+    expire_in: 7 days
+  needs: ["go_test"]
+  allow_failure: true
+  rules:
+    - exists:
+        - test/e2e/package.json
+
 # ===========================================
 # SECURITY SCAN
 # ===========================================

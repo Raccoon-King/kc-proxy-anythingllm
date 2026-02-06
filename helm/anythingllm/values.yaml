@@ -83,7 +83,7 @@ initContainers:
     enabled: true
     image: busybox:1.36
     host: weaviate
-    port: 80
+    port: 8080
     sleepSeconds: 2
     resources:
       requests:
@@ -115,8 +115,8 @@ env:
   # REQUIRED: Set to your proxy URL
   SIMPLE_SSO_NO_LOGIN_REDIRECT: ""  # e.g., https://app.example.com/login
   VECTOR_DB: "weaviate"
-  # Internal service URL - usually doesn't need changing
-  WEAVIATE_ENDPOINT: "http://weaviate:80"
+  # Internal service URL - must match Weaviate service port (8080)
+  WEAVIATE_ENDPOINT: "http://weaviate:8080"
   # JWT_SECRET: Leave empty to auto-generate, or set a specific value
   # WARNING: If auto-generated, it changes on each upgrade (users get logged out)
   # For production, set a stable value: --set anythingllm.env.JWT_SECRET=$(openssl rand -hex 32)
