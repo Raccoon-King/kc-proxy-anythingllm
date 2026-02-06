@@ -60,6 +60,21 @@ proxy:
     KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
     KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
     KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
+    # TLS options for Keycloak (airgapped/PKI)
+    # KEYCLOAK_CA_PATH: "/etc/ssl/keycloak/ca.pem"
+    # KEYCLOAK_INSECURE_SKIP_VERIFY: "false"
+
+  # Optional: mount a CA bundle for Keycloak TLS validation.
+  # extraVolumes:
+  #   - name: keycloak-ca
+  #     secret:
+  #       secretName: keycloak-ca
+  # extraVolumeMounts:
+  #   - name: keycloak-ca
+  #     mountPath: /etc/ssl/keycloak
+  #     readOnly: true
+  extraVolumes: []
+  extraVolumeMounts: []
 
   # REQUIRED: Set these secrets at install time
   # --set proxy.secretEnv.KEYCLOAK_CLIENT_SECRET=xxx

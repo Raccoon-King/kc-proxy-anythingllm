@@ -34,6 +34,16 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 topologySpreadConstraints: []
+# Optional: mount CA bundle for Keycloak TLS validation.
+# Example:
+# extraVolumes:
+#   - name: keycloak-ca
+#     secret:
+#       secretName: keycloak-ca
+# extraVolumeMounts:
+#   - name: keycloak-ca
+#     mountPath: /etc/ssl/keycloak
+#     readOnly: true
 extraVolumes: []
 extraVolumeMounts: []
 
@@ -85,12 +95,15 @@ configMap:
 
 # Environment variables for the proxy
 # IMPORTANT: Update Keycloak URLs for your environment
-env:
-  # REQUIRED: Configure these for your Keycloak instance
-  KEYCLOAK_ISSUER_URL: ""      # e.g., https://keycloak.example.com/realms/myrealm
-  KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
-  KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
-  KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
+  env:
+    # REQUIRED: Configure these for your Keycloak instance
+    KEYCLOAK_ISSUER_URL: ""      # e.g., https://keycloak.example.com/realms/myrealm
+    KEYCLOAK_CLIENT_ID: ""       # e.g., my-client
+    KEYCLOAK_REDIRECT_URL: ""    # e.g., https://app.example.com/auth/callback
+    KEYCLOAK_EXTERNAL_URL: ""    # e.g., https://keycloak.example.com/realms/myrealm
+    # TLS options for Keycloak (airgapped/PKI)
+    # KEYCLOAK_CA_PATH: "/etc/ssl/keycloak/ca.pem"
+    # KEYCLOAK_INSECURE_SKIP_VERIFY: "false"
 
 # Secrets - set via --set or external secret
 secretEnv:
