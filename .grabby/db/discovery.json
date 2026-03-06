@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-06T01:18:24.068Z",
+  "generatedAt": "2026-03-06T01:40:22.827Z",
   "root": "C:/Users/jesse/local-llm-proxy/keycloak-proxy-anythingllm",
   "languages": [
     "go",
@@ -22,7 +22,10 @@
     "schemaFiles": [],
     "migrationFiles": [],
     "codePaths": [
+      ".grabby/db/code_access_map.json",
       ".grabby/db/discovery.json",
+      ".grabby/db/relations.graph.json",
+      ".grabby/db/schema.snapshot.json",
       "helm/anythingllm/templates/pdb.yaml",
       "helm/anythingllm/templates/service.yaml",
       "helm/anythingllm/templates/serviceaccount.yaml",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-03-06T01:17:59.652Z",
+  "generatedAt": "2026-03-06T01:40:08.358Z",
   "packageName": "keycloak-proxy-anythingllm",
   "stackSummary": "Node.js project",
   "summary": "Node.js project detected from local repository structure. Primary working areas should be refined after initialization. Testing signals are present in the repository.",
