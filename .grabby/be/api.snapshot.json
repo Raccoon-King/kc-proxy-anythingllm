@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-03-06T01:18:44.633Z",
+  "profile": "api-service",
+  "styles": [],
+  "sources": [],
+  "versions": [],
+  "operations": [],
+  "compatibility": {
+    "comparedToGeneratedAt": null,
+    "breakingChanges": []
+  },
+  "warnings": [
+    "No API operations discovered from source-of-truth specs."
+  ]
+}

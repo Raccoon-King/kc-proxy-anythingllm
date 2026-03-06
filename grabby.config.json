@@ -1,0 +1,148 @@
+{
+  "$schema": "https://grabby.dev/schemas/config.json",
+  "version": "1.0",
+  "jira": {
+    "enabled": false,
+    "host": "",
+    "email": "",
+    "apiToken": "${JIRA_API_TOKEN}",
+    "project": "PROJ",
+    "deploymentType": "cloud",
+    "apiVersion": "3",
+    "defaults": {
+      "issueType": "Story",
+      "labels": [
+        "grabby",
+        "feature-contract"
+      ]
+    },
+    "customFields": {
+      "contractId": ""
+    },
+    "sync": {
+      "autoCreate": false,
+      "autoUpdate": false,
+      "bidirectional": false,
+      "statusMapping": {
+        "draft": "To Do",
+        "approved": "In Progress",
+        "executing": "In Progress",
+        "completed": "Done",
+        "archived": "Done"
+      }
+    }
+  },
+  "ai": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514",
+    "apiKey": "${ANTHROPIC_API_KEY}",
+    "providers": {
+      "bedrock": {
+        "region": "us-east-1",
+        "profile": "default"
+      }
+    }
+  },
+  "contracts": {
+    "directory": "contracts",
+    "trackingMode": "tracked",
+    "templates": ".grabby/templates",
+    "autoValidate": true,
+    "strictMode": false
+  },
+  "interactive": {
+    "enabled": true,
+    "defaultNextAction": null
+  },
+  "features": {
+    "menuMode": true,
+    "startupArt": true,
+    "rulesetWizard": true
+  },
+  "plugins": {
+    "autoSuggestOnInit": true,
+    "items": {
+      "argocd": {
+        "detected": true,
+        "source": "builtin",
+        "enabled": false,
+        "mode": "off"
+      },
+      "harbor": {
+        "detected": true,
+        "source": "builtin",
+        "enabled": false,
+        "mode": "off"
+      },
+      "helm": {
+        "detected": true,
+        "source": "builtin",
+        "enabled": false,
+        "mode": "off"
+      }
+    }
+  },
+  "dbGovernance": {
+    "strictArtifactLint": false,
+    "discovery": {
+      "packageRoots": [],
+      "schemaRoots": [],
+      "migrationRoots": []
+    },
+    "constraints": {
+      "ciDbAccess": "unspecified",
+      "airgapped": false,
+      "destructiveMigrationsRequireReview": true,
+      "offlineOnlyParsing": true
+    }
+  },
+  "systemGovernance": {
+    "profile": "auto",
+    "roots": {
+      "frontendRoots": [],
+      "backendRoots": [],
+      "apiSpecRoots": [],
+      "dbSchemaRoots": [],
+      "migrationRoots": []
+    },
+    "rulesetIngestion": {
+      "dbSafety": true,
+      "apiCompat": true,
+      "feDeps": true
+    },
+    "constraints": {
+      "airgapped": false,
+      "noDbInCi": false,
+      "noNetwork": false,
+      "noNewDependencies": false,
+      "strictBackwardsCompat": false
+    },
+    "topology": {
+      "separatedDeployHost": false,
+      "devHost": "",
+      "deployHost": "",
+      "clusterAccessFromDev": true,
+      "helmAccessFromDev": true,
+      "artifactGenerationOnly": false
+    }
+  },
+  "gitGovernance": {
+    "hosting": "both",
+    "defaultBranch": "main",
+    "updateStrategy": "repo-default",
+    "protectedBranches": [
+      "main",
+      "master"
+    ],
+    "allowForcePush": false,
+    "allowRebaseAfterReviewOpen": false,
+    "collaborationModel": "repo-default",
+    "requiredChecks": [
+      "lint",
+      "test",
+      "guard"
+    ],
+    "requirePreflightBeforeExecute": false,
+    "freshnessThresholdBehind": 0
+  }
+}

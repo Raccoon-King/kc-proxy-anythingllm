@@ -1,0 +1,9 @@
+{
+  "defaultBranch": "main",
+  "lastFetchTime": null,
+  "preferredUpdateStrategy": "repo-default",
+  "protectedBranches": [
+    "main",
+    "master"
+  ]
+}

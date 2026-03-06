@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "llm": {
+    "defaultProvider": "generic",
+    "providers": {
+      "generic": {
+        "type": "openai-compatible",
+        "model": "set-me"
+      }
+    }
+  },
+  "governance": {
+    "rules": [
+      "Obey contract scope and non-goals.",
+      "Do not modify restricted directories.",
+      "Explain tradeoffs before expanding scope.",
+      "Prefer minimal, testable changes."
+    ],
+    "guidance": [
+      "Treat the Grabby backlog as the execution order.",
+      "Finish subtasks in order unless a dependency forces a re-sequence.",
+      "Keep output deterministic and concise."
+    ]
+  },
+  "contractRequired": {
+    "fileCountThreshold": 10,
+    "restrictedPaths": [
+      "src/core",
+      "migrations"
+    ],
+    "alwaysRequireTypes": [
+      "architectural_change"
+    ]
+  },
+  "agile": {
+    "enabled": true,
+    "levels": [
+      "epic",
+      "task",
+      "subtask"
+    ],
+    "maxTasksPerEpic": 5,
+    "maxSubtasksPerTask": 5,
+    "splitBy": [
+      "scope",
+      "files",
+      "quality"
+    ],
+    "naming": {
+      "epicPrefix": "EPIC",
+      "taskPrefix": "TASK",
+      "subtaskPrefix": "SUBTASK"
+    }
+  },
+  "interactive": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-03-06T01:18:24.068Z",
+  "root": "C:/Users/jesse/local-llm-proxy/keycloak-proxy-anythingllm",
+  "languages": [
+    "go",
+    "node"
+  ],
+  "packageManager": null,
+  "databases": [],
+  "migrationTooling": [],
+  "queryStyles": [],
+  "constraints": {
+    "ciDbAccess": "unspecified",
+    "airgapped": false,
+    "destructiveMigrationsRequireReview": true,
+    "offlineOnlyParsing": true
+  },
+  "packageRoots": [],
+  "candidatePaths": {
+    "schemaRoots": [],
+    "migrationRoots": [],
+    "schemaFiles": [],
+    "migrationFiles": [],
+    "codePaths": [
+      ".grabby/db/discovery.json",
+      "helm/anythingllm/templates/pdb.yaml",
+      "helm/anythingllm/templates/service.yaml",
+      "helm/anythingllm/templates/serviceaccount.yaml",
+      "helm/proxy/templates/pdb.yaml",
+      "helm/proxy/templates/service.yaml",
+      "helm/proxy/templates/serviceaccount.yaml",
+      "helm/weaviate/templates/service.yaml"
+    ]
+  }
+}
