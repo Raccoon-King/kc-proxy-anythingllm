@@ -1,0 +1,32 @@
+contract: PROJECT-BASELINE.fc.md
+phase: plan
+timestamp: 2026-03-06T01:25:29.814Z
+context:
+  - ARCH:stack@v1
+  - RULESET:imports@v1
+  - ENV:test-runner@v1
+context_token_usage: 9
+context_token_budget: 1200
+files:
+  - action: create
+    path: contracts/PROJECT-BASELINE.fc.md
+    reason: Record the detected repository baseline
+  - action: modify
+    path: contracts/PROJECT-BASELINE.fc.md
+    reason: Refine the generated baseline after manual review
+  - action: modify
+    path: contracts/README.md
+    reason: Keep contract usage aligned with baseline generation
+rules:
+  - §typescript
+  - §hooks
+  - §testing
+risks:
+  - State synchronization
+  - Type coverage
+  - Edge cases
+status: approved
+approval_token_required: Approved
+execution_mode: plan_only
+approved_at: 2026-03-06T01:25:37.658Z
+approval_token: Approved

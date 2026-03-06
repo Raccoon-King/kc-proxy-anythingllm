@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-03-06T01:44:00.609Z",
+  "nodes": [
+    {
+      "id": "go-proxy/cmd/server/main_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/cmd/server/main.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/anythingllm/client_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/anythingllm/client.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/adapter_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/adapter.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/extra_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/oidc_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/oidc.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/session_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/auth/session.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/config/config_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/config/config.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/e2e_flow_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/e2e_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/integration_keycloak_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/integration_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/router_extra_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/router_more_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/router_ops_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/router_test.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/router.go",
+      "package": "."
+    },
+    {
+      "id": "go-proxy/internal/server/stig_test.go",
+      "package": "."
+    },
+    {
+      "id": "proxy/src/index.js",
+      "package": "proxy"
+    },
+    {
+      "id": "test/e2e/helpers/redirect-tracker.ts",
+      "package": "test/e2e"
+    },
+    {
+      "id": "test/e2e/playwright.config.ts",
+      "package": "test/e2e"
+    },
+    {
+      "id": "test/e2e/tests/auth-flow.spec.ts",
+      "package": "test/e2e"
+    },
+    {
+      "id": "test/e2e/tests/redirect-loop.spec.ts",
+      "package": "test/e2e"
+    }
+  ],
+  "edges": [
+    {
+      "from": "proxy/src/index.js",
+      "to": "dotenv",
+      "kind": "package"
+    },
+    {
+      "from": "proxy/src/index.js",
+      "to": "express",
+      "kind": "package"
+    },
+    {
+      "from": "proxy/src/index.js",
+      "to": "helmet",
+      "kind": "package"
+    },
+    {
+      "from": "proxy/src/index.js",
+      "to": "http-proxy-middleware",
+      "kind": "package"
+    },
+    {
+      "from": "proxy/src/index.js",
+      "to": "morgan",
+      "kind": "package"
+    },
+    {
+      "from": "test/e2e/helpers/redirect-tracker.ts",
+      "to": "@playwright/test",
+      "kind": "package"
+    },
+    {
+      "from": "test/e2e/playwright.config.ts",
+      "to": "@playwright/test",
+      "kind": "package"
+    },
+    {
+      "from": "test/e2e/tests/auth-flow.spec.ts",
+      "to": "@playwright/test",
+      "kind": "package"
+    },
+    {
+      "from": "test/e2e/tests/redirect-loop.spec.ts",
+      "to": "@playwright/test",
+      "kind": "package"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+governance:
+  version: 2.0.0
+  profile: default
+  rules_version: v1

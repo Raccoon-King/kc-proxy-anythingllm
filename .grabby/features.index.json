@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-03-06T01:19:28.137Z",
+  "trackingMode": "tracked",
+  "features": [
+    {
+      "id": "PROJECT-BASELINE",
+      "title": "Project Baseline for Node.js project",
+      "type": "FEATURE_CONTRACT",
+      "status": "draft",
+      "branch": null,
+      "lastModifiedAt": "2026-03-06T01:17:59.649Z",
+      "contractPath": "contracts/PROJECT-BASELINE.fc.md",
+      "planPath": null,
+      "auditPath": null,
+      "archivePath": null,
+      "closedAt": null
+    },
+    {
+      "id": "SYSTEM-BASELINE",
+      "title": "Grabby System Baseline",
+      "type": "FEATURE_CONTRACT",
+      "status": "draft",
+      "branch": null,
+      "lastModifiedAt": "2026-03-06T01:17:59.648Z",
+      "contractPath": "contracts/SYSTEM-BASELINE.fc.md",
+      "planPath": null,
+      "auditPath": null,
+      "archivePath": null,
+      "closedAt": null
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-06T01:42:57.737Z",
+  "packageName": "keycloak-proxy-anythingllm",
+  "stackSummary": "Node.js project",
+  "summary": "Node.js project detected from local repository structure. Primary working areas should be refined after initialization. Testing signals are present in the repository.",
+  "projectTypes": [
+    "go",
+    "node"
+  ],
+  "projectDirs": [],
+  "recommendedDirectories": [],
+  "scripts": [],
+  "dependencySignals": [],
+  "testing": {
+    "hasTests": true,
+    "signals": []
+  },
+  "governance": {
+    "hasContracts": true,
+    "allowedDirectories": [
+      "src",
+      "lib",
+      "tests"
+    ],
+    "restrictedDirectories": [
+      "node_modules",
+      ".git",
+      ".env*",
+      "coverage"
+    ]
+  },
+  "plugins": {
+    "suggested": [
+      "argocd",
+      "harbor",
+      "helm"
+    ]
+  },
+  "rootSignals": [
+    {
+      "name": "AGENTS.md",
+      "kind": "file"
+    },
+    {
+      "name": "argocd",
+      "kind": "dir"
+    },
+    {
+      "name": "certs",
+      "kind": "dir"
+    },
+    {
+      "name": "contracts",
+      "kind": "dir"
+    },
+    {
+      "name": "data",
+      "kind": "dir"
+    },
+    {
+      "name": "docker-compose.test.yml",
+      "kind": "file"
+    },
+    {
+      "name": "docker-compose.yml",
+      "kind": "file"
+    },
+    {
+      "name": "docs",
+      "kind": "dir"
+    },
+    {
+      "name": "env.example",
+      "kind": "file"
+    },
+    {
+      "name": "go-proxy",
+      "kind": "dir"
+    },
+    {
+      "name": "grabby.config.json",
+      "kind": "file"
+    },
+    {
+      "name": "helm",
+      "kind": "dir"
+    }
+  ]
+}

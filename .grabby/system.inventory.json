@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-03-06T01:44:00.633Z",
+  "root": "C:/Users/jesse/local-llm-proxy/keycloak-proxy-anythingllm",
+  "profile": "api-service",
+  "packageManager": "npm",
+  "monorepoTool": null,
+  "languages": [
+    "go",
+    "node"
+  ],
+  "frontend": {
+    "roots": [],
+    "frameworks": [],
+    "manifests": [],
+    "lockfiles": [
+      "proxy/package-lock.json"
+    ]
+  },
+  "backend": {
+    "roots": [
+      "proxy"
+    ],
+    "frameworks": [
+      "express"
+    ],
+    "manifests": [
+      "proxy/package.json"
+    ]
+  },
+  "api": {
+    "styles": [],
+    "specFiles": []
+  },
+  "db": {
+    "schemaAndMigrationFiles": []
+  },
+  "packageRoots": [
+    "proxy",
+    "test/e2e"
+  ],
+  "constraints": {
+    "airgapped": false,
+    "noDbInCi": false,
+    "noNetwork": false,
+    "noNewDependencies": false,
+    "strictBackwardsCompat": false
+  },
+  "rulesets": {
+    "recommended": [
+      "db-safety@v1",
+      "api-compat@v1"
+    ]
+  }
+}
